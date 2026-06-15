@@ -4,10 +4,15 @@ import {
   budgetRollup,
   monthlyBuckets,
   monthRange,
+  projectCompletion,
+  milestones,
+  savingStreak,
+  newlyReachedMilestones,
 } from "@/lib/calc";
 import { Card, Stat, LinkButton } from "@/components/ui";
 import { ProgressTrack } from "@/components/ProgressTrack";
 import { SavingsChart } from "@/components/SavingsChart";
+import { MilestoneCelebration } from "@/components/MilestoneCelebration";
 import { PlanSettings } from "./PlanSettings";
 import { formatMoney, formatDate } from "@/lib/format";
 
@@ -23,10 +28,16 @@ export default async function PlanDashboard({
   const budget = budgetRollup(calc.categories);
   const buckets = monthlyBuckets(calc);
   const months = monthRange(plan.startDate, plan.targetDate);
+  const projection = projectCompletion(calc);
+  const planMilestones = milestones(calc);
+  const streak = savingStreak(calc);
+  const newlyReached = newlyReachedMilestones(calc, plan.celebratedMilestones);
   const cur = plan.currency;
 
   return (
     <div className="space-y-6">
+      <MilestoneCelebration planId={plan.id} newlyReached={newlyReached} />
+
       {/* Hero */}
       <Card>
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -58,6 +69,76 @@ export default async function PlanDashboard({
             accent="gold"
           />
         </div>
+      </Card>
+
+      {/* Projected completion (Feature 2) */}
+      <Card>
+        <h2 className="font-semibold text-ink">คาดการณ์วันถึงเป้า</h2>
+        {projection.status === "complete" ? (
+          <p className="mt-2 rounded-lg bg-jade/10 px-3 py-2 text-sm font-medium text-jade">
+            🎉 เก็บครบเป้าหมายแล้ว
+          </p>
+        ) : projection.status === "no-pace" ? (
+          <p className="mt-2 text-sm text-muted">
+            ยังเก็บเงินไม่พอจะคาดการณ์ได้ — เริ่มบันทึกการเก็บเงินก่อน
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs text-muted">คาดว่าจะถึงเป้าวันที่</div>
+              <div className="text-xl font-semibold text-ink tabular">
+                {formatDate(projection.projectedDate)}
+              </div>
+              <div className="mt-1 text-xs text-muted tabular">
+                อิงอัตราเก็บเฉลี่ย {formatMoney(projection.pace, cur)}/เดือน ·
+                กำหนด {formatDate(plan.targetDate)}
+              </div>
+            </div>
+            <div
+              className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                projection.daysVsTarget >= 0
+                  ? "bg-jade/10 text-jade"
+                  : "bg-warn/10 text-warn"
+              }`}
+            >
+              {projection.daysVsTarget >= 0
+                ? `เร็วกว่ากำหนด ${projection.daysVsTarget} วัน`
+                : `ช้ากว่ากำหนด ${Math.abs(projection.daysVsTarget)} วัน`}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Milestones + streak (Feature 3) */}
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold text-ink">หมุดหมายความคืบหน้า</h2>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted">เก็บต่อเนื่อง</span>
+            <span className="rounded-full bg-gold/15 px-2.5 py-1 font-semibold text-gold tabular">
+              🔥 {streak} เดือน
+            </span>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {planMilestones.map((m) => (
+            <div
+              key={m.percent}
+              className={`rounded-xl border px-2 py-3 text-center ${
+                m.reached
+                  ? "border-gold/40 bg-gold/10 text-gold"
+                  : "border-ink/10 bg-paper text-muted"
+              }`}
+            >
+              <div className="text-lg font-bold tabular">{m.percent}%</div>
+              <div className="text-[11px]">{m.reached ? "ถึงแล้ว" : "ยังไม่ถึง"}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-muted">
+          สตรีค = จำนวนเดือนติดต่อกัน (นับจากเดือนล่าสุดที่มีข้อมูล)
+          ที่เก็บเงินได้ถึงเป้าต่อเดือน
+        </p>
       </Card>
 
       {/* Budget rollup */}

@@ -197,3 +197,43 @@ npm run dev               # http://localhost:3000
 - เก็บ amount เป็นค่าบวกเสมอ ตีความทิศทางจาก category.type
 - รองรับหลาย currency ในระดับ Plan (เก็บ field ไว้แล้ว แสดงผลตามนั้น)
 - เขียน .env.example ให้ครบ และ README สั้นๆ วิธีรัน
+
+## 13. Implemented features (เพิ่มหลัง scaffold)
+
+ทุกฟีเจอร์: logic คำนวณอยู่ฝั่ง server (`src/lib/calc.ts` แบบ pure หรือ `src/lib/*.ts` ที่แตะ DB),
+ทุก query/mutation scope ตาม session user + ต่อ Plan, ใช้ design tokens เดิม, เงินเป็น monospace,
+เคารพ `prefers-reduced-motion`.
+
+### 1) Recurring transactions (รายการประจำ)
+- model `RecurringRule { planId, categoryId, amount, description, dayOfMonth, startDate, endDate?, active }`
+  + `Transaction.sourceRuleId` (onDelete `SetNull` → ลบกฎแล้วรายการที่สร้างแล้วยังอยู่)
+- materialize แบบ lazy ที่ `src/lib/recurring.ts`: ตอนโหลดแดชบอร์ด/หน้า log (`loadOwnedPlan` default `materialize:true`)
+  จะสร้าง Transaction ที่ถึงกำหนดจาก startDate ถึงเดือนปัจจุบัน — idempotent (กันซ้ำด้วย `sourceRuleId`+เดือน),
+  ไม่สร้างเกิน `endDate`, clamp `dayOfMonth` กับวันสุดท้ายของเดือน
+- รายการที่สร้างแล้วเป็น Transaction ปกติ แก้/ลบทีละรายการได้ (มี badge "ประจำ" ในตาราง)
+- UI: `RecurringManager` บนหน้า log — สร้าง/แก้/หยุด(`active=false`)/ลบ + ปุ่ม "สร้างรายการประจำของเดือนนี้"
+- actions: `src/app/actions/recurring.ts`
+
+### 2) Projected completion date (คาดการณ์วันถึงเป้า)
+- `projectCompletion()` ใน calc.ts: `pace` = ค่าเฉลี่ย SAVING ต่อเดือนจาก ≤3 เดือนล่าสุดที่มีข้อมูล;
+  `projectedDate = today + remaining/pace เดือน`
+- แดชบอร์ดแสดงวันคาดการณ์ + เทียบ `targetDate` เป็นจำนวนวันเร็ว/ช้า (เขียวถ้าทัน/เร็ว, แดงถ้าช้า)
+- edge: `pace<=0` → "ยังเก็บเงินไม่พอจะคาดการณ์", ครบเป้าแล้ว → completed state
+
+### 3) Milestones + celebration + streak
+- milestone 25/50/75/100% เป็น badge บนแดชบอร์ด (ที่ถึงแล้ว highlight)
+- `Plan.celebratedMilestones Int[]` เก็บ % ที่ฉลองแล้ว → confetti ยิงครั้งเดียวต่อ milestone, ไม่ซ้ำ,
+  ปิดเมื่อ `prefers-reduced-motion` (`MilestoneCelebration` + `markMilestonesCelebratedAction`)
+- `savingStreak()`: จำนวนเดือนติดต่อกัน (นับจากเดือนล่าสุดที่มีข้อมูล) ที่ SAVING จริง ≥ plannedMonthly ของ SAVING
+
+### 4) Plan vs actual by category (แผนเทียบจริง)
+- หน้า `/plans/[id]/insights` + tab: ต่อหมวดแสดง plannedMonthly เทียบ actual ของเดือนที่เลือก
+  (default = เดือนปัจจุบัน), ส่วนต่าง, % การใช้งบ, แถบเทียบ planned/actual
+- หมวดที่เกินงบเป็นสีแดง (warn); `MonthSelect` จำกัดช่วง startDate→targetDate
+- `categoryComparison()` ใน calc.ts
+
+### 5) Variable expense trend (เทรนด์รายจ่ายผันแปร)
+- หน้า `/plans/[id]/trend` + tab: Recharts area รวมรายจ่าย VARIABLE ต่อเดือนตลอดช่วงแผน
+- toggle "แยกตามหมวด" → line chart หลายเส้นต่อหมวด VARIABLE
+- แสดงการเปลี่ยนแปลงเทียบเดือนก่อน (▲/▼ %, แดง=เพิ่ม จ่ายมากขึ้น / เขียว=ลด)
+- `variableTrend()` ใน calc.ts

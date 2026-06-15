@@ -47,3 +47,21 @@ export async function assertOwnsPlan(planId: string, userId: string) {
 }
 
 export type OwnedPlan = NonNullable<Awaited<ReturnType<typeof getOwnedPlan>>>;
+
+// Recurring rules for a plan owned by the user, newest first, with category info
+// and a count of generated transactions.
+export async function getOwnedPlanRules(planId: string, userId: string) {
+  const owned = await prisma.plan.findFirst({
+    where: { id: planId, userId },
+    select: { id: true },
+  });
+  if (!owned) return null;
+  return prisma.recurringRule.findMany({
+    where: { planId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      category: { select: { id: true, name: true, type: true } },
+      _count: { select: { transactions: true } },
+    },
+  });
+}

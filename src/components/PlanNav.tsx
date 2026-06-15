@@ -11,6 +11,8 @@ export function PlanNav({ planId }: { planId: string }) {
     { href: `${base}/budget`, label: "งบประมาณ" },
     { href: `${base}/log`, label: "บันทึกรายการ" },
     { href: `${base}/summary`, label: "สรุปรายเดือน" },
+    { href: `${base}/insights`, label: "แผนเทียบจริง" },
+    { href: `${base}/trend`, label: "เทรนด์ค่าใช้จ่าย" },
   ];
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-ink/10">

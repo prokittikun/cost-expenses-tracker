@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUserId, assertOwnsPlan } from "@/lib/data";
 import { ok, fail, type ActionResult } from "@/lib/action-state";
+import { monthKey } from "@/lib/calc";
 
 const addSchema = z.object({
   planId: z.string().min(1),
@@ -64,7 +65,27 @@ export async function deleteTransactionAction(
   const planId = String(formData.get("planId"));
   const txId = String(formData.get("txId"));
   await assertOwnsPlan(planId, userId);
-  await prisma.transaction.deleteMany({ where: { id: txId, planId } });
+
+  // Fetch first so we can tell whether this row came from a recurring rule.
+  const tx = await prisma.transaction.findFirst({
+    where: { id: txId, planId },
+    select: { id: true, sourceRuleId: true, date: true },
+  });
+  if (!tx) return fail("ไม่พบรายการ");
+
+  await prisma.transaction.delete({ where: { id: tx.id } });
+
+  // If it was generated from a rule, remember the (rule, month) so lazy
+  // materialization won't recreate it on the next load.
+  if (tx.sourceRuleId) {
+    const ym = monthKey(tx.date);
+    await prisma.recurringSkip.upsert({
+      where: { ruleId_ym: { ruleId: tx.sourceRuleId, ym } },
+      update: {},
+      create: { ruleId: tx.sourceRuleId, ym },
+    });
+  }
+
   revalidatePath(`/plans/${planId}/log`);
   revalidatePath(`/plans/${planId}`);
   revalidatePath(`/plans/${planId}/summary`);

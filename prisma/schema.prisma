@@ -30,8 +30,11 @@ model Plan {
   startDate    DateTime
   targetDate   DateTime
   archived     Boolean       @default(false)
+  // Milestone percentages already celebrated (e.g. [25, 50]) so confetti fires once.
+  celebratedMilestones Int[]   @default([])
   categories   Category[]
   transactions Transaction[]
+  recurringRules RecurringRule[]
   createdAt    DateTime      @default(now())
 
   @@index([userId])
@@ -46,23 +49,62 @@ model Category {
   plannedMonthly Float         @default(0)
   sortOrder      Int           @default(0)
   transactions   Transaction[]
+  recurringRules RecurringRule[]
 
   @@unique([planId, name])
   @@index([planId])
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
-  planId      String
-  plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id])
-  date        DateTime
-  amount      Float
-  description String
-  note        String   @default("")
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  planId       String
+  plan         Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id])
+  date         DateTime
+  amount       Float
+  description  String
+  note         String   @default("")
+  // Set when this row was materialized from a RecurringRule. Used to dedupe
+  // lazy generation (one row per rule per month) and to label generated entries.
+  sourceRuleId String?
+  sourceRule   RecurringRule? @relation(fields: [sourceRuleId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
 
   @@index([planId])
   @@index([categoryId])
+  @@index([sourceRuleId])
+}
+
+model RecurringRule {
+  id           String        @id @default(cuid())
+  planId       String
+  plan         Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     Category      @relation(fields: [categoryId], references: [id])
+  amount       Float
+  description  String
+  dayOfMonth   Int           // 1..31, clamped to the month's last day at materialization
+  startDate    DateTime
+  endDate      DateTime?     // inclusive; no entries generated after this month
+  active       Boolean       @default(true)
+  transactions Transaction[]
+  skips        RecurringSkip[]
+  createdAt    DateTime      @default(now())
+
+  @@index([planId])
+  @@index([categoryId])
+}
+
+// Records a (rule, month) occurrence the user deleted by hand, so lazy
+// materialization won't recreate it on the next load. ym is "YYYY-MM".
+model RecurringSkip {
+  id        String        @id @default(cuid())
+  ruleId    String
+  rule      RecurringRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ym        String
+  createdAt DateTime      @default(now())
+
+  @@unique([ruleId, ym])
+  @@index([ruleId])
 }

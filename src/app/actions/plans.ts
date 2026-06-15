@@ -144,3 +144,28 @@ export async function deletePlanAction(formData: FormData) {
   await prisma.plan.delete({ where: { id: planId } });
   redirect("/plans");
 }
+
+// Records that milestone percentages have been celebrated, so the confetti never
+// repeats. Called from the client right after the animation plays. Merges with the
+// existing set; ignores anything outside the known milestone percentages.
+export async function markMilestonesCelebratedAction(
+  planId: string,
+  percents: number[],
+): Promise<void> {
+  const userId = await requireUserId();
+  await assertOwnsPlan(planId, userId);
+  const valid = percents.filter((p) => [25, 50, 75, 100].includes(p));
+  if (valid.length === 0) return;
+  const plan = await prisma.plan.findUniqueOrThrow({
+    where: { id: planId },
+    select: { celebratedMilestones: true },
+  });
+  const merged = Array.from(
+    new Set([...plan.celebratedMilestones, ...valid]),
+  ).sort((a, b) => a - b);
+  await prisma.plan.update({
+    where: { id: planId },
+    data: { celebratedMilestones: merged },
+  });
+  revalidatePath(`/plans/${planId}`);
+}

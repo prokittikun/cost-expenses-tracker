@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   addTransactionAction,
@@ -25,6 +25,7 @@ type Tx = {
   amount: number;
   description: string;
   note: string;
+  fromRule: boolean;
 };
 
 const typeAccent: Record<CategoryType, string> = {
@@ -33,6 +34,48 @@ const typeAccent: Record<CategoryType, string> = {
   VARIABLE: "text-ink",
   SAVING: "text-gold",
 };
+
+// Quick-pick presets so users don't have to think up a description/remark each time.
+// Click fills the field; the value is still freely editable afterwards.
+const DESCRIPTION_PRESETS = [
+  "ค่าอาหาร",
+  "ค่าเดินทาง",
+  "ค่าช้อปปิ้ง",
+  "ค่าน้ำค่าไฟ",
+  "เก็บเงินประจำเดือน",
+  "เงินเดือน",
+];
+
+const NOTE_PRESETS = [
+  "ประจำเดือน",
+  "จ่ายแทนเพื่อน",
+  "ฉุกเฉิน",
+  "วางแผนไว้แล้ว",
+  "เกินงบ",
+];
+
+function QuickChips({
+  options,
+  onPick,
+}: {
+  options: string[];
+  onPick: (value: string) => void;
+}) {
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onPick(opt)}
+          className="rounded-full border border-ink/15 bg-paper px-2.5 py-0.5 text-xs text-ink transition-colors hover:border-gold hover:bg-gold/10"
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function AddBtn() {
   const { pending } = useFormStatus();
@@ -77,6 +120,16 @@ export function LogClient({
   useActionToast(state);
   const [filterMonth, setFilterMonth] = useState("");
   const [filterCat, setFilterCat] = useState("");
+
+  // Controlled so quick-pick chips can fill them; cleared after a successful add.
+  const [description, setDescription] = useState("");
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (state?.status === "success") {
+      setDescription("");
+      setNote("");
+    }
+  }, [state]);
 
   // month options from existing transactions
   const months = useMemo(() => {
@@ -144,11 +197,26 @@ export function LogClient({
               />
             </Field>
             <Field label="รายละเอียด">
-              <input name="description" required maxLength={200} className={inputClass} />
+              <input
+                name="description"
+                required
+                maxLength={200}
+                className={inputClass}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <QuickChips options={DESCRIPTION_PRESETS} onPick={setDescription} />
             </Field>
           </div>
           <Field label="หมายเหตุ (ไม่บังคับ)">
-            <input name="note" maxLength={500} className={inputClass} />
+            <input
+              name="note"
+              maxLength={500}
+              className={inputClass}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+            <QuickChips options={NOTE_PRESETS} onPick={setNote} />
           </Field>
           <AddBtn />
         </form>
@@ -212,6 +280,11 @@ export function LogClient({
                     </td>
                     <td className="py-2 pr-3">
                       {t.description}
+                      {t.fromRule && (
+                        <span className="ml-2 rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-medium text-gold">
+                          ประจำ
+                        </span>
+                      )}
                       {t.note && (
                         <span className="block text-xs text-muted">{t.note}</span>
                       )}
