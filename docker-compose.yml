@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-savings}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-savings}
+      POSTGRES_DB: ${POSTGRES_DB:-savings}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-savings} -d ${POSTGRES_DB:-savings}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Host port optional — app reaches db over the internal network by service name.
+    # Override DB_HOST_PORT to expose for external tools (psql/GUI). Default 5433 to
+    # avoid clashing with a Postgres already running on the host's 5432.
+    ports:
+      - "${DB_HOST_PORT:-5433}:5432"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-savings}:${POSTGRES_PASSWORD:-savings}@db:5432/${POSTGRES_DB:-savings}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      AUTH_TRUST_HOST: "true"
+      SEED_ON_START: ${SEED_ON_START:-false}
+      NODE_ENV: production
+    ports:
+      - "${APP_HOST_PORT:-3001}:3000"
+
+volumes:
+  pgdata:

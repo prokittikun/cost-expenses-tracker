@@ -1,0 +1,68 @@
+// PostgreSQL (Docker / prod). CategoryType stored as String + validated in code so
+// the schema stays portable back to SQLite for quick local dev if needed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  plans        Plan[]
+  createdAt    DateTime @default(now())
+}
+
+model Plan {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  description  String        @default("")
+  currency     String        @default("THB")
+  targetAmount Float
+  startDate    DateTime
+  targetDate   DateTime
+  archived     Boolean       @default(false)
+  categories   Category[]
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+
+  @@index([userId])
+}
+
+model Category {
+  id             String        @id @default(cuid())
+  planId         String
+  plan           Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  name           String
+  type           String // INCOME | FIXED | VARIABLE | SAVING
+  plannedMonthly Float         @default(0)
+  sortOrder      Int           @default(0)
+  transactions   Transaction[]
+
+  @@unique([planId, name])
+  @@index([planId])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  planId      String
+  plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  date        DateTime
+  amount      Float
+  description String
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([planId])
+  @@index([categoryId])
+}
