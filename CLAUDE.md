@@ -287,3 +287,21 @@ npm run dev               # http://localhost:3000
 - แดชบอร์ด: แสดงสรุปที่ cache ไว้ + ปุ่ม "สร้างสรุปใหม่"; เรียกเฉพาะตอนกด (ไม่เรียกอัตโนมัติ)
 - **opt-in + privacy**: ก่อนใช้ครั้งแรกแสดงคำชี้แจงว่าจะส่งตัวเลขสรุปการเงินไป Gemini แล้วต้องกดยินยอม
   (`setAiOptInAction` → `User.aiOptIn`); UI: `CoachSummary`, state จาก `getCoachState`
+
+### C) Conversational "Ask your data" (แชทถามข้อมูลตัวเอง — Gemini function calling)
+- ผู้ใช้ถามภาษาไทยเรื่องการเงินของตัวเอง เช่น "เดือนนี้หมดกับกาแฟไปเท่าไหร่", "หมวดไหนใช้เกินงบ",
+  "เป้าหมายไหนกำลังจะไม่ทัน" → ตอบโดยอ้างอิงข้อมูลจริง
+- **function calling loop** ใน `src/app/actions/ai-chat.ts` (`askDataAction(history, message, scopePlanId)`):
+  ส่งข้อความ+ประวัติ → ถ้าโมเดลขอเรียก tool → รัน tool ฝั่ง server → ส่ง functionResponse กลับ → วนจนได้คำตอบ
+  (จำกัด `MAX_TOOL_ROUNDS=6`)
+- **tools = read-only ทั้งหมด** (`src/lib/ai-tools.ts` impl + `src/lib/ai-tool-defs.ts` declarations):
+  `listPlans`, `getPlanProgress`, `getMonthlySummary`, `getTopCategories`, `searchTransactionsTotal`
+  (คืน SUM+count ไม่คืน row ดิบ), `getSpendingTrend`, `getSafeToSpend` — reuse helpers ใน calc.ts,
+  ตัวเลขคำนวณในโค้ดเราเอง โมเดลแค่เรียบเรียง
+- **ความปลอดภัย**: `userId` มาจาก session เท่านั้น (ไม่เคยรับจาก args ของโมเดล), ทุก planId ที่โมเดลส่งมา
+  ถูกตรวจสิทธิ์ว่าเป็นของ user ก่อนคืนข้อมูล, ไม่มี tool ที่ create/update/delete, description/note
+  ถือเป็นข้อความไม่น่าเชื่อถือ (กัน prompt injection) — design read-only + user-scoped กันไว้ทุกชั้น
+- system prompt ย้ำ: ใช้เฉพาะค่าจาก tool, ห้ามคิดเลขเอง, ไม่มีข้อมูลให้บอกตรงๆ, ตอบเฉพาะเรื่องการเงินของ user นี้
+- UI: ปุ่มลอย "💬 ถามข้อมูลของฉัน" บนหน้า plan (scope=แผนนั้น) และหน้า `/overview` (scope=ข้ามแผน),
+  multi-turn เก็บประวัติใน state (ไม่ persist ลง DB), empty state มีตัวอย่างคำถาม, loading/error,
+  reuse opt-in เดิม (`User.aiOptIn`) — `AskDataChat` component
