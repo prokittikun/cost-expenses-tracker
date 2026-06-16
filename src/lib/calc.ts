@@ -370,6 +370,228 @@ export function variableTrend(plan: PlanInput): VariableTrend {
   return { months, total, perCategory, latest };
 }
 
+// ── Safe-to-spend this month (Feature 2) ───────────────────────────────────
+// safeToSpend = plannedIncome − plannedFixed − savingTarget − actualVariableThisMonth
+// What's left to spend on variable categories this month before dipping into savings.
+
+export type SafeToSpend = {
+  plannedIncome: number;
+  plannedFixed: number;
+  savingTarget: number;
+  actualVariable: number;
+  safeToSpend: number;
+  daysRemaining: number; // including today
+  safePerDay: number;
+};
+
+export function safeToSpend(plan: PlanInput, now: Date = new Date()): SafeToSpend {
+  const budget = budgetRollup(plan.categories); // reuse planned rollups
+  const ym = monthKey(now);
+  const actualVariable = plan.transactions
+    .filter((t) => t.type === "VARIABLE" && monthKey(t.date) === ym)
+    .reduce((s, t) => s + t.amount, 0);
+
+  const value =
+    budget.income - budget.fixed - budget.saving - actualVariable;
+
+  const daysInMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+  ).getDate();
+  const daysRemaining = Math.max(daysInMonth - now.getDate() + 1, 1); // include today
+
+  return {
+    plannedIncome: budget.income,
+    plannedFixed: budget.fixed,
+    savingTarget: budget.saving,
+    actualVariable,
+    safeToSpend: value,
+    daysRemaining,
+    safePerDay: value / daysRemaining,
+  };
+}
+
+// ── Behavioral spending insights (Feature 3) ───────────────────────────────
+// Spending = FIXED + VARIABLE actual transactions. Defaults to the current month.
+
+export type SpendingInsights = {
+  ym: string;
+  monthTotal: number; // this month's expenses
+  prevTotal: number; // previous month's expenses
+  momChangeRatio: number | null; // (cur - prev)/prev; null when prev == 0
+  topCategory: { name: string; amount: number; share: number } | null; // share 0..1
+  avgDaily: number; // monthTotal / days elapsed
+};
+
+export function spendingInsights(
+  plan: PlanInput,
+  now: Date = new Date(),
+): SpendingInsights {
+  const ym = monthKey(now);
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevYm = monthKey(prevDate);
+  const isExpense = (t: CalcTransaction) =>
+    t.type === "FIXED" || t.type === "VARIABLE";
+
+  const catName = new Map(plan.categories.map((c) => [c.id, c.name]));
+
+  let monthTotal = 0;
+  let prevTotal = 0;
+  const byCat = new Map<string, number>();
+  for (const t of plan.transactions) {
+    if (!isExpense(t)) continue;
+    const tym = monthKey(t.date);
+    if (tym === ym) {
+      monthTotal += t.amount;
+      byCat.set(t.categoryId, (byCat.get(t.categoryId) ?? 0) + t.amount);
+    } else if (tym === prevYm) {
+      prevTotal += t.amount;
+    }
+  }
+
+  // top spending category this month
+  let topCategory: SpendingInsights["topCategory"] = null;
+  for (const [catId, amount] of byCat) {
+    if (!topCategory || amount > topCategory.amount) {
+      topCategory = {
+        name: catName.get(catId) ?? "—",
+        amount,
+        share: monthTotal > 0 ? amount / monthTotal : 0,
+      };
+    }
+  }
+
+  // days elapsed this month: if `now` is the current month, days up to today;
+  // otherwise the full month length.
+  const daysElapsed =
+    now.getFullYear() === new Date().getFullYear() &&
+    now.getMonth() === new Date().getMonth()
+      ? now.getDate()
+      : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+  return {
+    ym,
+    monthTotal,
+    prevTotal,
+    momChangeRatio: prevTotal > 0 ? (monthTotal - prevTotal) / prevTotal : null,
+    topCategory,
+    avgDaily: daysElapsed > 0 ? monthTotal / daysElapsed : 0,
+  };
+}
+
+// ── Cross-plan overview (Feature 1) ────────────────────────────────────────
+// Aggregates across the user's active plans. All cross-plan math is based on
+// SAVING flows and per-plan remaining/target only — income/fixed are per-plan
+// and would double-count, so they are intentionally excluded.
+
+export type PlanWithMeta = PlanInput & {
+  id: string;
+  name: string;
+  currency: string;
+};
+
+export type OverviewPlanCard = {
+  id: string;
+  name: string;
+  currency: string;
+  savedSoFar: number;
+  targetAmount: number;
+  targetDate: Date;
+  progress: number; // 0..1 capped
+  avgNeededPerMonth: number;
+  onTrack: boolean; // projection on/ahead of target (true also when complete)
+  projectionStatus: Projection["status"];
+};
+
+export type CrossPlanOverview = {
+  planCount: number;
+  totalSaved: number;
+  totalTarget: number;
+  overallProgress: number; // 0..1 capped
+  requiredPerMonth: number; // Σ avgNeededPerMonth over active plans
+  actualMonthlySaving: number; // avg monthly SAVING across all plans, last 3 months w/ data
+  overCommitted: boolean;
+  shortfall: number; // max(required - actual, 0)
+  cards: OverviewPlanCard[]; // sorted by soonest targetDate first
+};
+
+// Average monthly SAVING across ALL given plans over the last up-to-3 calendar
+// months that have any saving data (pooled across plans).
+function pooledActualMonthlySaving(
+  plans: PlanWithMeta[],
+  now: Date = new Date(),
+): number {
+  const byMonth = new Map<string, number>();
+  for (const plan of plans) {
+    for (const t of plan.transactions) {
+      if (t.type !== "SAVING") continue;
+      const ym = monthKey(t.date);
+      byMonth.set(ym, (byMonth.get(ym) ?? 0) + t.amount);
+    }
+  }
+  const monthsWithData = Array.from(byMonth.entries())
+    .filter(([, v]) => v !== 0)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .slice(-3);
+  if (monthsWithData.length === 0) return 0;
+  return (
+    monthsWithData.reduce((s, [, v]) => s + v, 0) / monthsWithData.length
+  );
+}
+
+export function crossPlanOverview(
+  plans: PlanWithMeta[],
+  now: Date = new Date(),
+): CrossPlanOverview {
+  let totalSaved = 0;
+  let totalTarget = 0;
+  let requiredPerMonth = 0;
+
+  const cards: OverviewPlanCard[] = plans.map((plan) => {
+    const summary = planSummary(plan, now);
+    const projection = projectCompletion(plan, now);
+    totalSaved += summary.savedSoFar;
+    totalTarget += plan.targetAmount;
+    requiredPerMonth += summary.avgNeededPerMonth;
+
+    const onTrack =
+      projection.status === "complete" ||
+      (projection.status === "projecting" && projection.daysVsTarget >= 0);
+
+    return {
+      id: plan.id,
+      name: plan.name,
+      currency: plan.currency,
+      savedSoFar: summary.savedSoFar,
+      targetAmount: plan.targetAmount,
+      targetDate: plan.targetDate,
+      progress: summary.progressCapped,
+      avgNeededPerMonth: summary.avgNeededPerMonth,
+      onTrack,
+      projectionStatus: projection.status,
+    };
+  });
+
+  // soonest deadline first → user funds the nearest goal first
+  cards.sort((a, b) => a.targetDate.getTime() - b.targetDate.getTime());
+
+  const actualMonthlySaving = pooledActualMonthlySaving(plans, now);
+  const overCommitted = requiredPerMonth > actualMonthlySaving;
+
+  return {
+    planCount: plans.length,
+    totalSaved,
+    totalTarget,
+    overallProgress: totalTarget > 0 ? Math.min(totalSaved / totalTarget, 1) : 0,
+    requiredPerMonth,
+    actualMonthlySaving,
+    overCommitted,
+    shortfall: Math.max(requiredPerMonth - actualMonthlySaving, 0),
+    cards,
+  };
+}
+
 // Per-category per-month totals (for the summary expense rows).
 export function categoryMonthlyTotals(
   plan: PlanInput,

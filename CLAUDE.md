@@ -237,3 +237,22 @@ npm run dev               # http://localhost:3000
 - toggle "แยกตามหมวด" → line chart หลายเส้นต่อหมวด VARIABLE
 - แสดงการเปลี่ยนแปลงเทียบเดือนก่อน (▲/▼ %, แดง=เพิ่ม จ่ายมากขึ้น / เขียว=ลด)
 - `variableTrend()` ใน calc.ts
+
+### 6) Cross-plan overview (ภาพรวมทุกเป้าหมาย)
+- หน้า `/overview` (landing หลังล็อกอิน, middleware ป้องกัน): รวมข้ามทุก Plan ที่ active ของ user
+- `crossPlanOverview()` ใน calc.ts: รวม savedSoFar/target, %คืบหน้ารวม,
+  `requiredPerMonth` = Σ avgNeededPerMonth, `actualMonthlySaving` = เฉลี่ย SAVING รวมทุกแผน
+  3 เดือนล่าสุดที่มีข้อมูล; ถ้า required > actual → เตือน "เก็บไม่ทันทุกเป้าหมาย" + ยอดที่ขาด
+- การ์ดต่อแผน (ชื่อ, %, saved/target, วันครบ, ตามแผน/ช้า) เรียงตาม targetDate ใกล้สุดก่อน
+- คิดเฉพาะ SAVING + remaining/target ข้ามแผน — **ไม่รวม** income/fixed (per-plan, กันนับซ้ำ)
+- ไม่เพิ่ม schema (ไม่ทำ `priority`); `getActiveUserPlansFull()` loader, shared `AppShell` (nav ภาพรวม/เป้าหมาย)
+
+### 7) Safe-to-spend this month (ใช้จ่ายได้อีกเดือนนี้ — ต่อ Plan)
+- การ์ดเด่นบนแดชบอร์ด: `safeToSpend` = plannedIncome − plannedFixed − savingTarget − actualVariableThisMonth
+  (เขียวบวก / แดงลบ = ใช้เกินกินเงินเก็บ) + `safePerDay` = safeToSpend / วันที่เหลือในเดือน
+- `safeToSpend()` ใน calc.ts (reuse `budgetRollup`)
+
+### 8) Behavioral spending insights (พฤติกรรมการใช้จ่าย — ต่อ Plan)
+- การ์ดบนแดชบอร์ด เดือนปัจจุบัน: ใช้จ่าย (FIXED+VARIABLE) เทียบเดือนก่อน (%, ▲/▼, แดง=เพิ่ม),
+  หมวดที่ใช้มากสุด (ยอด + %ของรายจ่าย), ใช้จ่ายเฉลี่ย/วัน (รวมเดือน ÷ วันที่ผ่านมา)
+- `spendingInsights()` ใน calc.ts

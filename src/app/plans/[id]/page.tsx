@@ -8,13 +8,15 @@ import {
   milestones,
   savingStreak,
   newlyReachedMilestones,
+  safeToSpend,
+  spendingInsights,
 } from "@/lib/calc";
 import { Card, Stat, LinkButton } from "@/components/ui";
 import { ProgressTrack } from "@/components/ProgressTrack";
 import { SavingsChart } from "@/components/SavingsChart";
 import { MilestoneCelebration } from "@/components/MilestoneCelebration";
 import { PlanSettings } from "./PlanSettings";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, formatPercent } from "@/lib/format";
 
 export default async function PlanDashboard({
   params,
@@ -32,6 +34,8 @@ export default async function PlanDashboard({
   const planMilestones = milestones(calc);
   const streak = savingStreak(calc);
   const newlyReached = newlyReachedMilestones(calc, plan.celebratedMilestones);
+  const safe = safeToSpend(calc);
+  const insights = spendingInsights(calc);
   const cur = plan.currency;
 
   return (
@@ -68,6 +72,91 @@ export default async function PlanDashboard({
             value={formatMoney(summary.avgNeededPerMonth, cur)}
             accent="gold"
           />
+        </div>
+      </Card>
+
+      {/* Safe-to-spend this month */}
+      <Card>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-xs text-muted">ใช้จ่ายได้อีกเดือนนี้ (ผันแปร)</div>
+            <div
+              className={`text-3xl font-bold tabular ${
+                safe.safeToSpend >= 0 ? "text-jade" : "text-warn"
+              }`}
+            >
+              {formatMoney(safe.safeToSpend, cur)}
+            </div>
+            <div className="mt-1 text-xs text-muted tabular">
+              เฉลี่ยได้อีก {formatMoney(safe.safePerDay, cur)}/วัน ·
+              เหลือ {safe.daysRemaining} วัน
+            </div>
+          </div>
+          {safe.safeToSpend < 0 && (
+            <div className="rounded-lg bg-warn/10 px-3 py-2 text-sm text-warn">
+              ใช้เกินงบ — กำลังกินเงินเก็บ
+            </div>
+          )}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Stat label="รายรับตามแผน" value={formatMoney(safe.plannedIncome, cur)} accent="jade" />
+          <Stat label="จ่ายคงที่" value={formatMoney(safe.plannedFixed, cur)} accent="ink" />
+          <Stat label="เป้าเก็บ" value={formatMoney(safe.savingTarget, cur)} accent="gold" />
+          <Stat
+            label="จ่ายผันแปรแล้วเดือนนี้"
+            value={formatMoney(safe.actualVariable, cur)}
+            accent="ink"
+          />
+        </div>
+      </Card>
+
+      {/* Behavioral spending insights */}
+      <Card>
+        <h2 className="font-semibold text-ink">พฤติกรรมการใช้จ่ายเดือนนี้</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <div className="text-xs text-muted">เทียบเดือนก่อน</div>
+            {insights.momChangeRatio == null ? (
+              <div className="mt-1 text-sm text-muted">ไม่มีข้อมูลเดือนก่อน</div>
+            ) : (
+              <div
+                className={`mt-1 text-xl font-semibold tabular ${
+                  insights.momChangeRatio > 0 ? "text-warn" : "text-jade"
+                }`}
+              >
+                {insights.momChangeRatio > 0 ? "▲" : "▼"}{" "}
+                {formatPercent(Math.abs(insights.momChangeRatio))}
+                <span className="ml-1 text-xs font-normal text-muted">
+                  {insights.momChangeRatio > 0 ? "ใช้มากขึ้น" : "ใช้น้อยลง"}
+                </span>
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-xs text-muted">หมวดที่ใช้มากสุด</div>
+            {insights.topCategory ? (
+              <div className="mt-1">
+                <div className="text-xl font-semibold text-ink tabular">
+                  {formatMoney(insights.topCategory.amount, cur)}
+                </div>
+                <div className="text-xs text-muted">
+                  {insights.topCategory.name} ·{" "}
+                  {formatPercent(insights.topCategory.share)} ของรายจ่าย
+                </div>
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-muted">ยังไม่มีรายจ่าย</div>
+            )}
+          </div>
+          <div>
+            <div className="text-xs text-muted">ใช้จ่ายเฉลี่ย/วัน</div>
+            <div className="mt-1 text-xl font-semibold text-ink tabular">
+              {formatMoney(insights.avgDaily, cur)}
+            </div>
+            <div className="text-xs text-muted">
+              รวมเดือนนี้ {formatMoney(insights.monthTotal, cur)}
+            </div>
+          </div>
         </div>
       </Card>
 

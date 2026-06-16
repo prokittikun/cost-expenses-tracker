@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 
-export default function PlansLayout({
+export default function OverviewLayout({
   children,
 }: {
   children: React.ReactNode;

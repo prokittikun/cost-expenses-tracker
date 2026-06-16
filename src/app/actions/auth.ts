@@ -36,7 +36,7 @@ export async function signupAction(
   await signIn("credentials", {
     email,
     password,
-    redirectTo: "/plans",
+    redirectTo: "/overview",
   });
   return undefined;
 }
@@ -51,7 +51,7 @@ export async function loginAction(
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/plans",
+      redirectTo: "/overview",
     });
   } catch (err) {
     if (err instanceof AuthError) {

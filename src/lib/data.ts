@@ -22,6 +22,19 @@ export async function getUserPlans(userId: string) {
   });
 }
 
+// Active (non-archived) plans for the cross-plan overview. Includes categories and
+// full transactions (date + type via category) so saving flows can be bucketed.
+export async function getActiveUserPlansFull(userId: string) {
+  return prisma.plan.findMany({
+    where: { userId, archived: false },
+    orderBy: { targetDate: "asc" },
+    include: {
+      categories: true,
+      transactions: { include: { category: { select: { type: true } } } },
+    },
+  });
+}
+
 // Returns the plan only if it belongs to userId, else null. Use everywhere a planId
 // arrives from the client.
 export async function getOwnedPlan(planId: string, userId: string) {
