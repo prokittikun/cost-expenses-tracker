@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SignupForm } from "./SignupForm";
+
+export const metadata: Metadata = {
+  title: "สมัครสมาชิก",
+  description: "สร้างบัญชีฟรีเพื่อเริ่มวางแผนและติดตามการเก็บเงินตามเป้าหมาย",
+  robots: { index: false, follow: true },
+};
 
 export default function SignupPage() {
   return (

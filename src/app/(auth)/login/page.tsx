@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "./LoginForm";
+
+export const metadata: Metadata = {
+  title: "เข้าสู่ระบบ",
+  description: "เข้าสู่ระบบเพื่อจัดการเป้าหมายการเก็บเงินของคุณ",
+  robots: { index: false, follow: true },
+};
 
 export default function LoginPage() {
   return (

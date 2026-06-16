@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Savings Planner">
+  <rect width="180" height="180" fill="#1B2A4A"/>
+  <circle cx="90" cy="90" r="52" fill="#D8A24A"/>
+  <circle cx="90" cy="90" r="52" fill="none" stroke="#B8852F" stroke-width="5"/>
+  <text x="90" y="118" font-family="IBM Plex Sans Thai, system-ui, sans-serif"
+        font-size="68" font-weight="700" text-anchor="middle" fill="#1B2A4A">฿</text>
+</svg>
