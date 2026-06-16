@@ -25,6 +25,11 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends openssl && r
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+# Bind the Next standalone server to all interfaces. Otherwise Docker's auto-set
+# HOSTNAME (the container ID) is used as the bind address and resolves to only one
+# of the container's network IPs — a reverse proxy on another docker network then
+# gets connection-refused (502).
+ENV HOSTNAME=0.0.0.0
 
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -m nextjs
 
