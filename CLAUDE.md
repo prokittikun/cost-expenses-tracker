@@ -256,3 +256,34 @@ npm run dev               # http://localhost:3000
 - การ์ดบนแดชบอร์ด เดือนปัจจุบัน: ใช้จ่าย (FIXED+VARIABLE) เทียบเดือนก่อน (%, ▲/▼, แดง=เพิ่ม),
   หมวดที่ใช้มากสุด (ยอด + %ของรายจ่าย), ใช้จ่ายเฉลี่ย/วัน (รวมเดือน ÷ วันที่ผ่านมา)
 - `spendingInsights()` ใน calc.ts
+
+## 14. AI features (ผู้ให้บริการ: Google Gemini)
+
+> **AI provider = Gemini** (`@google/genai`, default model `gemini-2.5-flash`, override ด้วย `GEMINI_MODEL`)
+> ทุก call อยู่ฝั่ง server เท่านั้น (`src/app/actions/ai.ts`) — key อ่านจาก `GEMINI_API_KEY`
+> ไม่หลุดถึง client. ถ้าไม่ตั้ง key ฟีเจอร์ AI ถูกซ่อน/คืน error อย่างนุ่มนวล
+> **กฎเด็ดขาด (ทุก prompt ย้ำไว้): โมเดลห้ามคิดเลข/แต่งตัวเลข** — เราคำนวณเลขทั้งหมดเอง
+> โมเดลแค่แยกข้อความหรือเขียนคำอธิบายจากตัวเลขที่เราส่งให้
+> `src/lib/gemini.ts` = client (`getGemini`, `isGeminiConfigured`, `GEMINI_MODEL`)
+
+### A) Natural-language transaction entry + auto-categorize
+- หน้า log: ช่องพิมพ์ข้อความอิสระภาษาไทย (เช่น "ข้าวเที่ยง 120 เมื่อวาน", "จ่ายค่าเน็ต 600")
+- `parseTransactionAction`: ส่งชื่อหมวด+type, วันที่วันนี้, ข้อความ → Gemini ตอบ JSON structured
+  (`responseMimeType: application/json` + `responseSchema`): { date, categoryName, amount, description }
+- **validate/normalize ในโค้ดเราเอง**: amount เป็นเลขบวก, แปลง/clamp วันที่ ≤ วันนี้,
+  จับ categoryName เข้าหมวดจริงของแผน (exact → contains → fallback VARIABLE/แรก)
+- แสดงผลเป็นฟอร์ม prefilled แก้ได้ — ผู้ใช้ยืนยันก่อนบันทึก (ไม่ auto-save), บันทึกผ่าน `addTransactionAction` เดิม
+- auto-categorize: ปุ่ม "✨ ให้ AI แนะนำหมวด" ในฟอร์มปกติ → `suggestCategoryAction` (เป็นแค่คำแนะนำ ผู้ใช้เปลี่ยนได้)
+- UI: `AiQuickEntry` (แสดงเมื่อมี key), guard = เรียกเฉพาะตอนกดปุ่ม ไม่เรียกตอนโหลดหน้า
+
+### B) Monthly AI coach summary
+- model `InsightSummary { planId, month "YYYY-MM", content, generatedAt, @@unique([planId, month]) }`
+  + `User.aiOptIn Boolean` (migration `ai_insight_summary`)
+- `coachFigures()` ใน calc.ts รวมเลขที่คำนวณแล้ว (reuse `planSummary`/`spendingInsights`/`projectCompletion`/
+  `categoryComparison`): รายรับ-จ่ายรวม, %เทียบเดือนก่อน, หมวดใช้มากสุด, เฉลี่ย/วัน, %คืบหน้าเก็บเงิน,
+  avgNeededPerMonth, วันคาดการณ์ vs targetDate, ส่วนต่างงบเด่นสุด
+- `generateCoachSummaryAction`: ส่ง **เฉพาะตัวเลขเหล่านี้** + prompt ภาษาไทยให้เขียนสรุปสั้นๆ เป็นกันเอง
+  (เดือนนี้เป็นไง เงินรั่วตรงไหน ข้อแนะนำ 2-3 ข้อ) ย้ำห้ามคิดเลข → cache ลง `InsightSummary`
+- แดชบอร์ด: แสดงสรุปที่ cache ไว้ + ปุ่ม "สร้างสรุปใหม่"; เรียกเฉพาะตอนกด (ไม่เรียกอัตโนมัติ)
+- **opt-in + privacy**: ก่อนใช้ครั้งแรกแสดงคำชี้แจงว่าจะส่งตัวเลขสรุปการเงินไป Gemini แล้วต้องกดยินยอม
+  (`setAiOptInAction` → `User.aiOptIn`); UI: `CoachSummary`, state จาก `getCoachState`

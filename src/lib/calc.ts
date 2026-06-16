@@ -480,6 +480,94 @@ export function spendingInsights(
   };
 }
 
+// ── Coach summary figures (AI feature B) ───────────────────────────────────
+// Bundles deterministically-computed numbers for one month. These are the ONLY
+// figures handed to Gemini — the model writes prose, never math.
+
+export type CoachFigures = {
+  month: string;
+  currency: string;
+  totalIncome: number;
+  totalExpense: number; // FIXED + VARIABLE this month
+  momSpendingChangePct: number | null; // vs previous month, percent (e.g. 15 = +15%)
+  topCategory: { name: string; amount: number; sharePct: number } | null;
+  avgDailySpend: number;
+  savingProgressPct: number; // 0..100
+  avgNeededPerMonth: number;
+  projectedDate: string | null; // ISO date or null
+  targetDate: string;
+  projectionStatus: Projection["status"];
+  daysVsTarget: number | null; // + ahead / - behind
+  topVariances: { name: string; planned: number; actual: number; variance: number }[];
+};
+
+export function coachFigures(
+  plan: PlanWithMeta,
+  month: string,
+  now: Date = new Date(),
+): CoachFigures {
+  const summary = planSummary(plan, now);
+  const projection = projectCompletion(plan, now);
+  const insights = spendingInsights(plan, monthAnchor(month, now));
+
+  // income + expense for the selected month
+  let totalIncome = 0;
+  for (const t of plan.transactions) {
+    if (t.type === "INCOME" && monthKey(t.date) === month) totalIncome += t.amount;
+  }
+
+  // largest plan-vs-actual variances (by absolute variance), top 3
+  const topVariances = categoryComparison(plan, month)
+    .filter((c) => c.type === "FIXED" || c.type === "VARIABLE")
+    .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))
+    .slice(0, 3)
+    .map((c) => ({
+      name: c.name,
+      planned: c.planned,
+      actual: c.actual,
+      variance: c.variance,
+    }));
+
+  return {
+    month,
+    currency: plan.currency,
+    totalIncome,
+    totalExpense: insights.monthTotal,
+    momSpendingChangePct:
+      insights.momChangeRatio == null
+        ? null
+        : Math.round(insights.momChangeRatio * 100),
+    topCategory: insights.topCategory
+      ? {
+          name: insights.topCategory.name,
+          amount: insights.topCategory.amount,
+          sharePct: Math.round(insights.topCategory.share * 100),
+        }
+      : null,
+    avgDailySpend: insights.avgDaily,
+    savingProgressPct: Math.round(summary.progressCapped * 100),
+    avgNeededPerMonth: summary.avgNeededPerMonth,
+    projectedDate:
+      projection.status === "projecting"
+        ? projection.projectedDate.toISOString().slice(0, 10)
+        : null,
+    targetDate: plan.targetDate.toISOString().slice(0, 10),
+    projectionStatus: projection.status,
+    daysVsTarget:
+      projection.status === "projecting" ? projection.daysVsTarget : null,
+    topVariances,
+  };
+}
+
+// Anchor a "YYYY-MM" to a Date inside that month for helpers that key off `now`.
+// If it's the current month, keep the real `now` (so "days elapsed" is correct);
+// otherwise anchor to that month's last day.
+function monthAnchor(month: string, now: Date): Date {
+  const [y, m] = month.split("-").map(Number);
+  if (now.getFullYear() === y && now.getMonth() === m - 1) return now;
+  return new Date(y, m, 0); // last day of that month
+}
+
 // ── Cross-plan overview (Feature 1) ────────────────────────────────────────
 // Aggregates across the user's active plans. All cross-plan math is based on
 // SAVING flows and per-plan remaining/target only — income/fixed are per-plan

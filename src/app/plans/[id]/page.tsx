@@ -16,6 +16,8 @@ import { ProgressTrack } from "@/components/ProgressTrack";
 import { SavingsChart } from "@/components/SavingsChart";
 import { MilestoneCelebration } from "@/components/MilestoneCelebration";
 import { PlanSettings } from "./PlanSettings";
+import { CoachSummary } from "./CoachSummary";
+import { getCoachState } from "@/app/actions/ai";
 import { formatMoney, formatDate, formatPercent } from "@/lib/format";
 
 export default async function PlanDashboard({
@@ -36,6 +38,7 @@ export default async function PlanDashboard({
   const newlyReached = newlyReachedMilestones(calc, plan.celebratedMilestones);
   const safe = safeToSpend(calc);
   const insights = spendingInsights(calc);
+  const coach = await getCoachState(plan.id);
   const cur = plan.currency;
 
   return (
@@ -159,6 +162,16 @@ export default async function PlanDashboard({
           </div>
         </div>
       </Card>
+
+      {/* AI coach summary (Gemini) */}
+      <CoachSummary
+        planId={plan.id}
+        configured={coach.configured}
+        optedIn={coach.optedIn}
+        content={coach.content}
+        generatedAt={coach.generatedAt}
+        month={coach.month}
+      />
 
       {/* Projected completion (Feature 2) */}
       <Card>

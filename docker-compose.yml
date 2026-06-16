@@ -32,6 +32,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
       AUTH_TRUST_HOST: "true"
       SEED_ON_START: ${SEED_ON_START:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY in .env}
       NODE_ENV: production
     ports:
       - "${APP_HOST_PORT:-3001}:3000"

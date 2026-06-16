@@ -2,6 +2,8 @@ import { loadOwnedPlan } from "@/lib/plan-view";
 import { requireUserId, getOwnedPlanRules } from "@/lib/data";
 import { LogClient } from "./LogClient";
 import { RecurringManager } from "./RecurringManager";
+import { AiQuickEntry } from "./AiQuickEntry";
+import { isGeminiConfigured } from "@/lib/gemini";
 import type { CategoryType } from "@/lib/categories";
 import { toDateInputValue } from "@/lib/format";
 
@@ -50,6 +52,9 @@ export default async function LogPage({
 
   return (
     <div className="space-y-6">
+      {isGeminiConfigured() && (
+        <AiQuickEntry planId={plan.id} categories={categories} />
+      )}
       <RecurringManager
         planId={plan.id}
         currency={plan.currency}
@@ -61,6 +66,7 @@ export default async function LogPage({
         currency={plan.currency}
         categories={categories}
         transactions={transactions}
+        aiEnabled={isGeminiConfigured()}
       />
     </div>
   );

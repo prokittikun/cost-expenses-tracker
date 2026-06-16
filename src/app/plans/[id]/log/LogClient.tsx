@@ -1,11 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import {
   addTransactionAction,
   deleteTransactionAction,
 } from "@/app/actions/transactions";
+import { suggestCategoryAction } from "@/app/actions/ai";
+import { useToast } from "@/components/toast";
 import {
   CATEGORY_TYPES,
   CATEGORY_TYPE_LABEL,
@@ -111,26 +113,49 @@ export function LogClient({
   currency,
   categories,
   transactions,
+  aiEnabled = false,
 }: {
   planId: string;
   currency: string;
   categories: Cat[];
   transactions: Tx[];
+  aiEnabled?: boolean;
 }) {
   const [state, action] = useActionState(addTransactionAction, undefined);
   useActionToast(state);
   const [filterMonth, setFilterMonth] = useState("");
   const [filterCat, setFilterCat] = useState("");
 
-  // Controlled so quick-pick chips can fill them; cleared after a successful add.
+  // Controlled so quick-pick chips / AI suggestion can fill them; cleared after add.
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [suggesting, startSuggest] = useTransition();
+  const toast = useToast();
   useEffect(() => {
     if (state?.status === "success") {
       setDescription("");
       setNote("");
+      setCategoryId("");
     }
   }, [state]);
+
+  // Auto-categorization (suggestion only — user can still change the select).
+  function suggestCategory() {
+    if (!description.trim()) {
+      toast.error("ใส่รายละเอียดก่อนให้ AI แนะนำ");
+      return;
+    }
+    startSuggest(async () => {
+      const res = await suggestCategoryAction(planId, description);
+      if (res.status === "ok") {
+        setCategoryId(res.categoryId);
+        toast.success(`AI แนะนำหมวด: ${res.categoryName}`);
+      } else {
+        toast.error(res.message);
+      }
+    });
+  }
 
   // month options from existing transactions
   const months = useMemo(() => {
@@ -174,8 +199,27 @@ export function LogClient({
                 className={`${inputClass} tabular`}
               />
             </Field>
+            <Field label="รายละเอียด">
+              <input
+                name="description"
+                required
+                maxLength={200}
+                className={inputClass}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <QuickChips options={DESCRIPTION_PRESETS} onPick={setDescription} />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="หมวดหมู่">
-              <select name="categoryId" required className={inputClass} defaultValue="">
+              <select
+                name="categoryId"
+                required
+                className={inputClass}
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
                 <option value="" disabled>
                   เลือกหมวด…
                 </option>
@@ -189,9 +233,17 @@ export function LogClient({
                   </optgroup>
                 ))}
               </select>
+              {aiEnabled && (
+                <button
+                  type="button"
+                  onClick={suggestCategory}
+                  disabled={suggesting || !description.trim()}
+                  className="mt-1.5 rounded-full border border-ink/15 bg-paper px-2.5 py-0.5 text-xs text-ink transition-colors hover:border-gold hover:bg-gold/10 disabled:opacity-50"
+                >
+                  {suggesting ? "กำลังแนะนำ…" : "✨ ให้ AI แนะนำหมวด"}
+                </button>
+              )}
             </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="จำนวนเงิน">
               <input
                 name="amount"
@@ -202,17 +254,6 @@ export function LogClient({
                 className={`${inputClass} tabular`}
                 placeholder="0"
               />
-            </Field>
-            <Field label="รายละเอียด">
-              <input
-                name="description"
-                required
-                maxLength={200}
-                className={inputClass}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-              <QuickChips options={DESCRIPTION_PRESETS} onPick={setDescription} />
             </Field>
           </div>
           <Field label="หมายเหตุ (ไม่บังคับ)">
