@@ -84,6 +84,34 @@ SEED_ON_START=true docker compose up -d --build
 แก้ `provider = "postgresql"` ใน `prisma/schema.prisma` และตั้ง `DATABASE_URL` เป็น connection string
 (Neon/Supabase) แล้วรัน `npx prisma migrate deploy`
 
+## CI/CD (GitHub Actions → Docker Hub)
+
+สอง workflow ใน `.github/workflows/`:
+
+- **ci.yml** — ทุก push/PR เข้า `main`: `npm ci` → `prisma generate` → `tsc --noEmit` → `next build`
+  (ไม่ต่อ DB จริง ใช้ค่า placeholder)
+- **docker-publish.yml** — ทุก push เข้า `main` และ tag `v*`: build แล้ว push image
+  `prokittikun/cost-expenses-tracker` ขึ้น Docker Hub
+  - push `main` → tag `latest` + `sha-<short>`
+  - tag `v1.2.3` → tag `1.2.3`, `1.2`, `1`
+  - ใช้ GitHub Actions cache เร่ง build
+
+ตั้ง secret ใน repo (Settings → Secrets and variables → Actions):
+
+| Secret | ค่า |
+|---|---|
+| `DOCKERHUB_USERNAME` | username ของ Docker Hub |
+| `DOCKERHUB_TOKEN` | access token (Docker Hub → Account Settings → Security → New Access Token, สิทธิ์ Read/Write) |
+
+ดึง image ไปใช้:
+
+```bash
+docker pull prokittikun/cost-expenses-tracker:latest
+```
+
+> compose ใช้ image แทน build เอง: เพิ่ม `image: prokittikun/cost-expenses-tracker:latest`
+> ในบริการ `app` แล้วเอา `build:` ออก
+
 ## โครงสร้างโค้ด
 
 - `src/lib/calc.ts` — สูตรคำนวณทั้งหมด (pure, ไม่มี DB)

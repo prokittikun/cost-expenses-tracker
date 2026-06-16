@@ -22,6 +22,7 @@ type Tx = {
   categoryName: string;
   type: CategoryType;
   date: string;
+  createdAt: string;
   amount: number;
   description: string;
   note: string;
@@ -137,11 +138,17 @@ export function LogClient({
     return Array.from(set).sort().reverse();
   }, [transactions]);
 
-  const filtered = transactions.filter((t) => {
-    if (filterMonth && t.date.slice(0, 7) !== filterMonth) return false;
-    if (filterCat && t.categoryId !== filterCat) return false;
-    return true;
-  });
+  const filtered = transactions
+    .filter((t) => {
+      if (filterMonth && t.date.slice(0, 7) !== filterMonth) return false;
+      if (filterCat && t.categoryId !== filterCat) return false;
+      return true;
+    })
+    // Newest first: by transaction date, then by entry time for same-day rows.
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return a.createdAt < b.createdAt ? 1 : -1;
+    });
 
   const grouped = CATEGORY_TYPES.map((type) => ({
     type,

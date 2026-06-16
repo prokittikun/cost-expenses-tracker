@@ -28,6 +28,7 @@ export default async function LogPage({
     categoryName: t.category.name,
     type: t.category.type as CategoryType,
     date: t.date.toISOString(),
+    createdAt: t.createdAt.toISOString(),
     amount: t.amount,
     description: t.description,
     note: t.note,
