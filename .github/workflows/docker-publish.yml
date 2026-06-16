@@ -46,5 +46,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Public site URL is baked in (NEXT_PUBLIC_*) so SEO/OG absolute URLs
+          # are correct. Override via repo variable SITE_URL if the domain changes.
+          build-args: |
+            NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'https://ledger.kittikun.dev' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

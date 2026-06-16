@@ -16,6 +16,11 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends openssl && r
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* are inlined at build time. The public site URL must be present
+# here so metadataBase (SEO canonical + absolute OG/Twitter image URLs) is correct.
+# Override per build: docker build --build-arg NEXT_PUBLIC_SITE_URL=https://your-domain
+ARG NEXT_PUBLIC_SITE_URL="https://ledger.kittikun.dev"
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 RUN npx prisma generate && npm run build
 
 # ---- runner ----
