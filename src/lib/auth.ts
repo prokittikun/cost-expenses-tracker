@@ -9,8 +9,16 @@ const credSchema = z.object({
   password: z.string().min(1),
 });
 
+const THIRTY_DAYS = 30 * 24 * 60 * 60; // seconds
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: THIRTY_DAYS, // login valid for 30 days of inactivity
+    updateAge: 24 * 60 * 60, // refresh the token at most once per day (rolling)
+  },
+  // Explicit JWT maxAge so the signed token's exp matches the session window.
+  jwt: { maxAge: THIRTY_DAYS },
   pages: {
     signIn: "/login",
   },
