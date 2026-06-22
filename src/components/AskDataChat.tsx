@@ -78,14 +78,20 @@ export function AskDataChat({
         className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-medium text-white shadow-lg transition-colors hover:bg-ink/90"
         aria-expanded={open}
       >
-        💬 ถามข้อมูลของฉัน
+        💬 ถามข้อมูลของฉัน{" "}
+        <span className="rounded bg-gold/20 px-1.5 py-0.5 text-[10px] font-bold text-gold uppercase tracking-wider">
+          Beta
+        </span>
       </button>
 
       {open && (
         <div className="fixed bottom-20 right-5 z-40 flex h-[32rem] w-[min(92vw,26rem)] flex-col overflow-hidden rounded-2xl border border-ink/10 bg-card shadow-2xl">
           <div className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
-            <div className="font-semibold text-ink">
-              ถามข้อมูลของฉัน{" "}
+            <div className="flex items-center gap-2 font-semibold text-ink">
+              ถามข้อมูลของฉัน
+              <span className="rounded bg-gold/20 px-1.5 py-0.5 text-[10px] font-bold text-gold uppercase tracking-wider">
+                Beta
+              </span>
               <span className="text-xs font-normal text-muted">
                 {scopePlanId ? "· เป้าหมายนี้" : "· ทุกเป้าหมาย"} · Gemini
               </span>
