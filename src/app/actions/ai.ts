@@ -4,7 +4,12 @@ import { Type } from "@google/genai";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUserId, getOwnedPlan, assertOwnsPlan } from "@/lib/data";
-import { getGemini, isGeminiConfigured, GEMINI_MODEL } from "@/lib/gemini";
+import {
+  getGemini,
+  isGeminiConfigured,
+  GEMINI_MODEL,
+  geminiErrorMessage,
+} from "@/lib/gemini";
 import { CATEGORY_TYPE_LABEL, type CategoryType } from "@/lib/categories";
 import {
   coachFigures,
@@ -102,8 +107,8 @@ ${categoryList}
       },
     });
     raw = res.text ?? "";
-  } catch {
-    return { status: "error", message: "เรียก AI ไม่สำเร็จ ลองใหม่อีกครั้ง" };
+  } catch (err) {
+    return { status: "error", message: geminiErrorMessage(err) };
   }
 
   let obj: { date?: string; categoryName?: string; amount?: unknown; description?: string };
@@ -201,8 +206,8 @@ ${categoryList}
       },
     });
     raw = res.text ?? "";
-  } catch {
-    return { status: "error", message: "เรียก AI ไม่สำเร็จ" };
+  } catch (err) {
+    return { status: "error", message: geminiErrorMessage(err) };
   }
 
   let wanted = "";
@@ -387,8 +392,8 @@ ${figuresBlock}
       config: { temperature: 0.4 },
     });
     content = (res.text ?? "").trim();
-  } catch {
-    return { status: "error", message: "เรียก AI ไม่สำเร็จ ลองใหม่อีกครั้ง" };
+  } catch (err) {
+    return { status: "error", message: geminiErrorMessage(err) };
   }
   if (!content) {
     return { status: "error", message: "AI ไม่ตอบกลับ ลองใหม่อีกครั้ง" };

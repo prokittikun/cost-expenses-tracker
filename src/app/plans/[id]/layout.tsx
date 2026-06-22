@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireUserId } from "@/lib/data";
 import { prisma } from "@/lib/prisma";
 import { PlanNav } from "@/components/PlanNav";
+import { AskDataChat } from "@/components/AskDataChat";
+import { isGeminiConfigured } from "@/lib/gemini";
 
 export default async function PlanLayout({
   children,
@@ -13,10 +15,16 @@ export default async function PlanLayout({
 }) {
   const { id } = await params;
   const userId = await requireUserId();
-  const plan = await prisma.plan.findFirst({
-    where: { id, userId },
-    select: { id: true, name: true, archived: true },
-  });
+  const [plan, user] = await Promise.all([
+    prisma.plan.findFirst({
+      where: { id, userId },
+      select: { id: true, name: true, archived: true },
+    }),
+    prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { aiOptIn: true },
+    }),
+  ]);
   if (!plan) notFound();
 
   return (
@@ -36,6 +44,9 @@ export default async function PlanLayout({
         <PlanNav planId={plan.id} />
       </div>
       <div className="mt-6">{children}</div>
+      {isGeminiConfigured() && (
+        <AskDataChat scopePlanId={plan.id} optedIn={user.aiOptIn} />
+      )}
     </div>
   );
 }

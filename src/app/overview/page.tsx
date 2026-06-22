@@ -1,13 +1,23 @@
 import Link from "next/link";
 import { requireUserId, getActiveUserPlansFull } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
 import { crossPlanOverview, type PlanWithMeta } from "@/lib/calc";
 import type { CategoryType } from "@/lib/categories";
 import { Card, Stat, LinkButton } from "@/components/ui";
+import { AskDataChat } from "@/components/AskDataChat";
+import { isGeminiConfigured } from "@/lib/gemini";
 import { formatMoney, formatDate, formatPercent } from "@/lib/format";
 
 export default async function OverviewPage() {
   const userId = await requireUserId();
   const plans = await getActiveUserPlansFull(userId);
+  const aiUser = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { aiOptIn: true },
+  });
+  const aiChat = isGeminiConfigured() ? (
+    <AskDataChat scopePlanId={null} optedIn={aiUser.aiOptIn} />
+  ) : null;
 
   const planInputs: PlanWithMeta[] = plans.map((p) => {
     const catType = new Map<string, CategoryType>(
@@ -54,6 +64,7 @@ export default async function OverviewPage() {
             </LinkButton>
           </div>
         </Card>
+        {aiChat}
       </div>
     );
   }
@@ -168,6 +179,7 @@ export default async function OverviewPage() {
           </Link>
         ))}
       </div>
+      {aiChat}
     </div>
   );
 }
