@@ -9,7 +9,14 @@ import { GoogleGenAI } from "@google/genai";
 // invent numbers. We compute every figure deterministically and pass it in; the
 // model only parses text or writes prose around the numbers we give it.
 
+// Light tasks (parse / suggest / coach): flash-lite is cheap and good enough.
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
+
+// Conversational chat uses function calling + multi-step Thai reasoning, which
+// flash-lite handles poorly (picks wrong tool, returns empty answers). Use the
+// stronger flash by default; override with GEMINI_CHAT_MODEL.
+export const GEMINI_CHAT_MODEL =
+  process.env.GEMINI_CHAT_MODEL ?? "gemini-2.5-flash";
 
 let client: GoogleGenAI | null = null;
 
