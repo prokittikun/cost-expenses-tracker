@@ -42,11 +42,12 @@ export default async function PlansPage() {
                 .filter((c) => (c.type as CategoryType) === "SAVING")
                 .map((c) => c.id),
             );
+            // net pot: deposits add, withdrawals subtract
             const saved = plan.transactions
               .filter((t) => savingCatIds.has(t.categoryId))
-              .reduce((s, t) => s + t.amount, 0);
+              .reduce((s, t) => s + (t.isWithdrawal ? -t.amount : t.amount), 0);
             const progress =
-              plan.targetAmount > 0 ? saved / plan.targetAmount : 0;
+              plan.targetAmount > 0 ? Math.max(saved / plan.targetAmount, 0) : 0;
 
             return (
               <Link key={plan.id} href={`/plans/${plan.id}`}>

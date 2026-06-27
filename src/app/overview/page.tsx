@@ -43,6 +43,7 @@ export default async function OverviewPage() {
         type: t.category.type as CategoryType,
         date: t.date,
         amount: t.amount,
+        isWithdrawal: t.isWithdrawal,
       })),
     };
   });

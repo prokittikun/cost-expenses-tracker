@@ -15,8 +15,18 @@ export type CalcTransaction = {
   categoryId: string;
   type: CategoryType;
   date: Date;
-  amount: number;
+  amount: number; // always positive; direction comes from type / isWithdrawal
+  // For SAVING transactions: true = เบิกออก (subtracts from the pot) instead of
+  // a deposit. Lets savedSoFar / chart / projection reflect the real balance.
+  isWithdrawal?: boolean;
 };
+
+// Signed contribution of a transaction to the savings pot. Deposits add,
+// withdrawals subtract; non-SAVING contributes 0.
+export function savingDelta(t: CalcTransaction): number {
+  if (t.type !== "SAVING") return 0;
+  return t.isWithdrawal ? -t.amount : t.amount;
+}
 
 export type PlanInput = {
   targetAmount: number;
@@ -62,26 +72,36 @@ export function monthsRemaining(targetDate: Date, now: Date = new Date()): numbe
 }
 
 export type PlanSummary = {
-  savedSoFar: number;
+  savedSoFar: number; // net = grossSaved − withdrawn
+  grossSaved: number; // total ever deposited
+  withdrawn: number; // total withdrawn from the pot
   remaining: number;
-  progress: number; // 0..1, uncapped
+  progress: number; // 0..1, uncapped (based on net)
   progressCapped: number; // 0..1
   monthsRemaining: number;
   avgNeededPerMonth: number;
 };
 
 export function planSummary(plan: PlanInput, now: Date = new Date()): PlanSummary {
-  const savedSoFar = plan.transactions
-    .filter((t) => t.type === "SAVING")
-    .reduce((s, t) => s + t.amount, 0);
+  let grossSaved = 0;
+  let withdrawn = 0;
+  for (const t of plan.transactions) {
+    if (t.type !== "SAVING") continue;
+    if (t.isWithdrawal) withdrawn += t.amount;
+    else grossSaved += t.amount;
+  }
+  const savedSoFar = grossSaved - withdrawn; // net pot balance
   const remaining = Math.max(plan.targetAmount - savedSoFar, 0);
   const progress = plan.targetAmount > 0 ? savedSoFar / plan.targetAmount : 0;
   const mr = monthsRemaining(plan.targetDate, now);
   return {
     savedSoFar,
+    grossSaved,
+    withdrawn,
     remaining,
     progress,
-    progressCapped: Math.min(progress, 1),
+    // clamp to [0,1]: over-withdrawing can push net below 0
+    progressCapped: Math.max(Math.min(progress, 1), 0),
     monthsRemaining: mr,
     avgNeededPerMonth: remaining / mr,
   };
@@ -127,7 +147,7 @@ export function monthlyBuckets(plan: PlanInput): MonthBucket[] {
     if (!b) continue; // outside plan range → ignored in summary
     if (t.type === "INCOME") b.income += t.amount;
     else if (t.type === "FIXED" || t.type === "VARIABLE") b.expense += t.amount;
-    else if (t.type === "SAVING") b.saving += t.amount;
+    else if (t.type === "SAVING") b.saving += savingDelta(t); // net (deposit − withdraw)
   }
 
   let cumulative = 0;
@@ -167,12 +187,12 @@ export function projectCompletion(
   const summary = planSummary(plan, now);
   if (summary.remaining <= 0) return { status: "complete" };
 
-  // SAVING totals per month, only months that have any saving recorded.
+  // Net SAVING per month (deposits − withdrawals), months with any movement.
   const byMonth = new Map<string, number>();
   for (const t of plan.transactions) {
     if (t.type !== "SAVING") continue;
     const ym = monthKey(t.date);
-    byMonth.set(ym, (byMonth.get(ym) ?? 0) + t.amount);
+    byMonth.set(ym, (byMonth.get(ym) ?? 0) + savingDelta(t));
   }
   const monthsWithData = Array.from(byMonth.entries())
     .filter(([, v]) => v !== 0)
@@ -243,7 +263,7 @@ export function savingStreak(plan: PlanInput): number {
   for (const t of plan.transactions) {
     if (t.type !== "SAVING") continue;
     const ym = monthKey(t.date);
-    byMonth.set(ym, (byMonth.get(ym) ?? 0) + t.amount);
+    byMonth.set(ym, (byMonth.get(ym) ?? 0) + savingDelta(t)); // net per month
   }
   const monthsWithData = Array.from(byMonth.keys()).sort();
   if (monthsWithData.length === 0) return 0;
@@ -615,7 +635,7 @@ function pooledActualMonthlySaving(
     for (const t of plan.transactions) {
       if (t.type !== "SAVING") continue;
       const ym = monthKey(t.date);
-      byMonth.set(ym, (byMonth.get(ym) ?? 0) + t.amount);
+      byMonth.set(ym, (byMonth.get(ym) ?? 0) + savingDelta(t)); // net
     }
   }
   const monthsWithData = Array.from(byMonth.entries())

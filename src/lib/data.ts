@@ -17,7 +17,7 @@ export async function getUserPlans(userId: string) {
     orderBy: [{ archived: "asc" }, { createdAt: "desc" }],
     include: {
       categories: true,
-      transactions: { select: { amount: true, categoryId: true } },
+      transactions: { select: { amount: true, categoryId: true, isWithdrawal: true } },
     },
   });
 }

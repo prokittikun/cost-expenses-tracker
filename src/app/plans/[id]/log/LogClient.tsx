@@ -29,6 +29,7 @@ type Tx = {
   description: string;
   note: string;
   fromRule: boolean;
+  isWithdrawal: boolean;
 };
 
 const typeAccent: Record<CategoryType, string> = {
@@ -324,10 +325,17 @@ export function LogClient({
                       {formatDate(t.date)}
                     </td>
                     <td className="py-2 pr-3">
-                      <span className={typeAccent[t.type]}>{t.categoryName}</span>
+                      <span className={t.isWithdrawal ? "text-warn" : typeAccent[t.type]}>
+                        {t.categoryName}
+                      </span>
                     </td>
                     <td className="py-2 pr-3">
                       {t.description}
+                      {t.isWithdrawal && (
+                        <span className="ml-2 rounded-full bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
+                          เบิกออก
+                        </span>
+                      )}
                       {t.fromRule && (
                         <span className="ml-2 rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-medium text-gold">
                           ประจำ
@@ -337,7 +345,12 @@ export function LogClient({
                         <span className="block text-xs text-muted">{t.note}</span>
                       )}
                     </td>
-                    <td className={`py-2 pr-3 text-right tabular ${typeAccent[t.type]}`}>
+                    <td
+                      className={`py-2 pr-3 text-right tabular ${
+                        t.isWithdrawal ? "text-warn" : typeAccent[t.type]
+                      }`}
+                    >
+                      {t.isWithdrawal ? "−" : ""}
                       {formatMoney(t.amount, currency)}
                     </td>
                     <td className="py-2 text-right">

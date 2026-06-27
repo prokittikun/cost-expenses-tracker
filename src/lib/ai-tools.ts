@@ -61,7 +61,7 @@ type DbPlan = {
   startDate: Date;
   targetDate: Date;
   categories: { id: string; name: string; type: string; plannedMonthly: number; sortOrder: number }[];
-  transactions: { id: string; categoryId: string; date: Date; amount: number; category: { type: string } }[];
+  transactions: { id: string; categoryId: string; date: Date; amount: number; isWithdrawal: boolean; category: { type: string } }[];
 };
 
 function toPlanWithMeta(plan: DbPlan): PlanWithMeta {
@@ -78,6 +78,7 @@ function toPlanWithMeta(plan: DbPlan): PlanWithMeta {
     type: t.category.type as CategoryType,
     date: t.date,
     amount: t.amount,
+    isWithdrawal: t.isWithdrawal,
   }));
   return {
     id: plan.id,

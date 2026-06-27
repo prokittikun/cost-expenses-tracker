@@ -257,6 +257,20 @@ npm run dev               # http://localhost:3000
   หมวดที่ใช้มากสุด (ยอด + %ของรายจ่าย), ใช้จ่ายเฉลี่ย/วัน (รวมเดือน ÷ วันที่ผ่านมา)
 - `spendingInsights()` ใน calc.ts
 
+### 9) Withdraw from goal (เบิกเงินออกจากเป้าหมาย)
+- `Transaction.isWithdrawal Boolean @default(false)` (migration `transaction_withdrawal`):
+  true เฉพาะรายการหมวด SAVING = เบิกเงินออกจากกระปุก, **amount ยังบวกเสมอ** (sign อยู่ที่ calc)
+- `savingDelta(t)` ใน calc.ts: deposit `+amount`, withdrawal `−amount`; ใช้ทุกที่ที่รวม SAVING
+  (`planSummary`, `monthlyBuckets`, `projectCompletion`, `savingStreak`, cross-plan) → ยอด/กราฟ/
+  คาดการณ์/สตรีค สะท้อนยอดจริงหลังเบิก
+- `planSummary` คืน `savedSoFar` (net = gross − withdrawn) + `grossSaved` + `withdrawn`;
+  ความคืบหน้า % คิดจาก **net**, `progressCapped` clamp `[0,1]` (เบิกเกินทำให้ net ติดลบได้)
+- action `withdrawFromGoalAction` (ใน actions/transactions.ts): สร้าง Transaction หมวด SAVING แรกของแผน
+  `isWithdrawal=true` — เบิกเกินยอดคงเหลือ "เตือนแต่ให้ผ่าน"
+- UI: การ์ด `WithdrawMoney` บนแดชบอร์ด (จำนวน/วันที่/เหตุผล), hero โชว์ "เก็บเข้าทั้งหมด/เบิกออก/คงเหลือ"
+  เมื่อเคยเบิก, ตาราง log ติด badge "เบิกออก" สีแดง + ยอดมีเครื่องหมายลบ
+- ทุก mapping DB→calc ส่ง `isWithdrawal` (plan-view, overview, ai-tools, ai.ts, plans list, log)
+
 ## 14. AI features (ผู้ให้บริการ: Google Gemini)
 
 > **AI provider = Gemini** (`@google/genai`, default model `gemini-2.5-flash`, override ด้วย `GEMINI_MODEL`)

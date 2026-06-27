@@ -83,6 +83,10 @@ model Transaction {
   amount       Float
   description  String
   note         String   @default("")
+  // For SAVING-category rows only: true = withdrawal (เบิกออก) that subtracts from
+  // the goal's pot instead of a deposit. amount stays positive; the sign is applied
+  // in calc. Always false for INCOME/FIXED/VARIABLE.
+  isWithdrawal Boolean  @default(false)
   // Set when this row was materialized from a RecurringRule. Used to dedupe
   // lazy generation (one row per rule per month) and to label generated entries.
   sourceRuleId String?

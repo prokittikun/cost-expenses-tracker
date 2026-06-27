@@ -290,6 +290,7 @@ function toPlanWithMeta(
     type: catType.get(t.categoryId) ?? "VARIABLE",
     date: t.date,
     amount: t.amount,
+    isWithdrawal: t.isWithdrawal,
   }));
   return {
     id: plan.id,

@@ -16,6 +16,7 @@ import { ProgressTrack } from "@/components/ProgressTrack";
 import { SavingsChart } from "@/components/SavingsChart";
 import { MilestoneCelebration } from "@/components/MilestoneCelebration";
 import { PlanSettings } from "./PlanSettings";
+import { WithdrawMoney } from "./WithdrawMoney";
 import { CoachSummary } from "./CoachSummary";
 import { getCoachState } from "@/app/actions/ai";
 import { formatMoney, formatDate, formatPercent } from "@/lib/format";
@@ -76,6 +77,13 @@ export default async function PlanDashboard({
             accent="gold"
           />
         </div>
+        {summary.withdrawn > 0 && (
+          <p className="mt-4 text-xs text-muted tabular">
+            เก็บเข้าทั้งหมด {formatMoney(summary.grossSaved, cur)} · เบิกออกไปแล้ว{" "}
+            <span className="text-warn">{formatMoney(summary.withdrawn, cur)}</span> ·
+            คงเหลือในเป้า {formatMoney(summary.savedSoFar, cur)}
+          </p>
+        )}
       </Card>
 
       {/* Safe-to-spend this month */}
@@ -280,6 +288,13 @@ export default async function PlanDashboard({
           />
         </div>
       </Card>
+
+      {/* Withdraw from the savings pot */}
+      <WithdrawMoney
+        planId={plan.id}
+        currency={cur}
+        available={summary.savedSoFar}
+      />
 
       {/* Settings / archive / delete */}
       <PlanSettings

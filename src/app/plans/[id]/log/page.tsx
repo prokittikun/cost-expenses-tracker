@@ -35,6 +35,7 @@ export default async function LogPage({
     description: t.description,
     note: t.note,
     fromRule: t.sourceRuleId != null,
+    isWithdrawal: t.isWithdrawal,
   }));
 
   const ruleViews = rules.map((r) => ({
