@@ -87,6 +87,10 @@ model Transaction {
   // the goal's pot instead of a deposit. amount stays positive; the sign is applied
   // in calc. Always false for INCOME/FIXED/VARIABLE.
   isWithdrawal Boolean  @default(false)
+  // Links transactions mirrored across plans (same income/expense entered once,
+  // shared into other goals). All copies in a group share this id; deleting one
+  // deletes the group. Null = not synced. Only for INCOME/FIXED/VARIABLE.
+  syncGroupId  String?
   // Set when this row was materialized from a RecurringRule. Used to dedupe
   // lazy generation (one row per rule per month) and to label generated entries.
   sourceRuleId String?
@@ -96,6 +100,7 @@ model Transaction {
   @@index([planId])
   @@index([categoryId])
   @@index([sourceRuleId])
+  @@index([syncGroupId])
 }
 
 model RecurringRule {

@@ -1,5 +1,6 @@
 import { loadOwnedPlan } from "@/lib/plan-view";
 import { requireUserId, getOwnedPlanRules } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
 import { LogClient } from "./LogClient";
 import { RecurringManager } from "./RecurringManager";
 import { AiQuickEntry } from "./AiQuickEntry";
@@ -17,6 +18,13 @@ export default async function LogPage({
   const { plan } = await loadOwnedPlan(id);
   const userId = await requireUserId();
   const rules = (await getOwnedPlanRules(id, userId)) ?? [];
+
+  // Other active goals to offer as sync targets (enter once, mirror into these).
+  const otherPlans = await prisma.plan.findMany({
+    where: { userId, archived: false, id: { not: id } },
+    select: { id: true, name: true },
+    orderBy: { createdAt: "desc" },
+  });
 
   const categories = plan.categories.map((c) => ({
     id: c.id,
@@ -36,6 +44,7 @@ export default async function LogPage({
     note: t.note,
     fromRule: t.sourceRuleId != null,
     isWithdrawal: t.isWithdrawal,
+    synced: t.syncGroupId != null,
   }));
 
   const ruleViews = rules.map((r) => ({
@@ -68,6 +77,7 @@ export default async function LogPage({
         categories={categories}
         transactions={transactions}
         aiEnabled={isGeminiConfigured()}
+        otherPlans={otherPlans}
       />
     </div>
   );

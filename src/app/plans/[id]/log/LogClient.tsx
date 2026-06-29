@@ -18,6 +18,7 @@ import { useActionToast } from "@/components/useActionToast";
 import { formatMoney, formatDate, toDateInputValue, formatMonthLabel } from "@/lib/format";
 
 type Cat = { id: string; name: string; type: CategoryType };
+type PlanRef = { id: string; name: string };
 type Tx = {
   id: string;
   categoryId: string;
@@ -30,6 +31,7 @@ type Tx = {
   note: string;
   fromRule: boolean;
   isWithdrawal: boolean;
+  synced: boolean;
 };
 
 const typeAccent: Record<CategoryType, string> = {
@@ -90,14 +92,25 @@ function AddBtn() {
   );
 }
 
-function DeleteTxButton({ planId, txId }: { planId: string; txId: string }) {
+function DeleteTxButton({
+  planId,
+  txId,
+  synced = false,
+}: {
+  planId: string;
+  txId: string;
+  synced?: boolean;
+}) {
   const [state, action] = useActionState(deleteTransactionAction, undefined);
   useActionToast(state);
   return (
     <form
       action={action}
       onSubmit={(e) => {
-        if (!confirm("ลบรายการนี้?")) e.preventDefault();
+        const msg = synced
+          ? "รายการนี้ซิงค์ข้ามเป้าหมาย — ลบแล้วจะลบทุกเป้าที่ซิงค์ไว้ ยืนยัน?"
+          : "ลบรายการนี้?";
+        if (!confirm(msg)) e.preventDefault();
       }}
     >
       <input type="hidden" name="planId" value={planId} />
@@ -115,12 +128,14 @@ export function LogClient({
   categories,
   transactions,
   aiEnabled = false,
+  otherPlans = [],
 }: {
   planId: string;
   currency: string;
   categories: Cat[];
   transactions: Tx[];
   aiEnabled?: boolean;
+  otherPlans?: PlanRef[];
 }) {
   const [state, action] = useActionState(addTransactionAction, undefined);
   useActionToast(state);
@@ -180,6 +195,11 @@ export function LogClient({
     type,
     items: categories.filter((c) => c.type === type),
   })).filter((g) => g.items.length > 0);
+
+  // Sync is offered for income/expense only (savings allocation is per-goal).
+  const selectedType = categories.find((c) => c.id === categoryId)?.type;
+  const canSync =
+    otherPlans.length > 0 && !!selectedType && selectedType !== "SAVING";
 
   return (
     <div className="space-y-6">
@@ -267,6 +287,34 @@ export function LogClient({
             />
             <QuickChips options={NOTE_PRESETS} onPick={setNote} />
           </Field>
+
+          {canSync && (
+            <fieldset className="rounded-lg border border-ink/10 p-3">
+              <legend className="px-1 text-xs font-medium text-ink">
+                ใช้ร่วมกับเป้าหมายอื่น (กรอกครั้งเดียว ซิงค์ไปด้วย)
+              </legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {otherPlans.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex cursor-pointer items-center gap-2 text-sm text-ink"
+                  >
+                    <input
+                      type="checkbox"
+                      name="syncPlanIds"
+                      value={p.id}
+                      className="accent-gold"
+                    />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-muted">
+                รายการที่ซิงค์จะผูกกัน — ลบที่เป้าไหนก็ลบพร้อมกันทุกเป้า
+              </p>
+            </fieldset>
+          )}
+
           <AddBtn />
         </form>
       </Card>
@@ -341,6 +389,11 @@ export function LogClient({
                           ประจำ
                         </span>
                       )}
+                      {t.synced && (
+                        <span className="ml-2 rounded-full bg-jade/15 px-1.5 py-0.5 text-[10px] font-medium text-jade">
+                          ซิงค์
+                        </span>
+                      )}
                       {t.note && (
                         <span className="block text-xs text-muted">{t.note}</span>
                       )}
@@ -354,7 +407,7 @@ export function LogClient({
                       {formatMoney(t.amount, currency)}
                     </td>
                     <td className="py-2 text-right">
-                      <DeleteTxButton planId={planId} txId={t.id} />
+                      <DeleteTxButton planId={planId} txId={t.id} synced={t.synced} />
                     </td>
                   </tr>
                 ))}

@@ -72,6 +72,35 @@ const addSchema = z.object({
   note: z.string().trim().max(500).optional(),
 });
 
+// Find a category in `targetPlanId` matching (name, type); create it if missing
+// so a mirrored transaction always has a home category in the other goal.
+async function ensureCategory(
+  targetPlanId: string,
+  name: string,
+  type: string,
+): Promise<string> {
+  const existing = await prisma.category.findFirst({
+    where: { planId: targetPlanId, name },
+    select: { id: true, type: true },
+  });
+  if (existing) return existing.id;
+  const max = await prisma.category.aggregate({
+    where: { planId: targetPlanId },
+    _max: { sortOrder: true },
+  });
+  const created = await prisma.category.create({
+    data: {
+      planId: targetPlanId,
+      name,
+      type,
+      plannedMonthly: 0,
+      sortOrder: (max._max.sortOrder ?? -1) + 1,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 export async function addTransactionAction(
   _prev: ActionResult,
   formData: FormData,
@@ -93,9 +122,28 @@ export async function addTransactionAction(
   // category must belong to this plan
   const cat = await prisma.category.findFirst({
     where: { id: d.categoryId, planId: d.planId },
-    select: { id: true },
+    select: { id: true, name: true, type: true },
   });
   if (!cat) return fail("หมวดไม่ถูกต้อง");
+
+  // Optional sync: mirror this row into other goals. Only for non-SAVING
+  // (savings allocation is per-goal). Verify each target belongs to the user.
+  let syncTargets: string[] = [];
+  if (cat.type !== "SAVING") {
+    const requested = formData
+      .getAll("syncPlanIds")
+      .map(String)
+      .filter((id) => id && id !== d.planId);
+    if (requested.length > 0) {
+      const owned = await prisma.plan.findMany({
+        where: { id: { in: requested }, userId },
+        select: { id: true },
+      });
+      syncTargets = owned.map((p) => p.id);
+    }
+  }
+
+  const syncGroupId = syncTargets.length > 0 ? crypto.randomUUID() : null;
 
   await prisma.transaction.create({
     data: {
@@ -105,12 +153,37 @@ export async function addTransactionAction(
       amount: d.amount,
       description: d.description,
       note: d.note ?? "",
+      syncGroupId,
     },
   });
+
+  // Create the mirrored copies in each target goal, sharing syncGroupId.
+  for (const targetPlanId of syncTargets) {
+    const targetCatId = await ensureCategory(targetPlanId, cat.name, cat.type);
+    await prisma.transaction.create({
+      data: {
+        planId: targetPlanId,
+        categoryId: targetCatId,
+        date: d.date,
+        amount: d.amount,
+        description: d.description,
+        note: d.note ?? "",
+        syncGroupId,
+      },
+    });
+    revalidatePath(`/plans/${targetPlanId}/log`);
+    revalidatePath(`/plans/${targetPlanId}`);
+    revalidatePath(`/plans/${targetPlanId}/summary`);
+  }
+
   revalidatePath(`/plans/${d.planId}/log`);
   revalidatePath(`/plans/${d.planId}`);
   revalidatePath(`/plans/${d.planId}/summary`);
-  return ok("บันทึกรายการแล้ว");
+  return ok(
+    syncTargets.length > 0
+      ? `บันทึกแล้ว + ซิงค์ไป ${syncTargets.length} เป้าหมาย`
+      : "บันทึกรายการแล้ว",
+  );
 }
 
 export async function deleteTransactionAction(
@@ -122,14 +195,37 @@ export async function deleteTransactionAction(
   const txId = String(formData.get("txId"));
   await assertOwnsPlan(planId, userId);
 
-  // Fetch first so we can tell whether this row came from a recurring rule.
+  // Fetch first so we can tell whether this row came from a recurring rule
+  // and whether it's part of a cross-goal sync group.
   const tx = await prisma.transaction.findFirst({
     where: { id: txId, planId },
-    select: { id: true, sourceRuleId: true, date: true },
+    select: { id: true, sourceRuleId: true, date: true, syncGroupId: true },
   });
   if (!tx) return fail("ไม่พบรายการ");
 
-  await prisma.transaction.delete({ where: { id: tx.id } });
+  let synced = 0;
+  if (tx.syncGroupId) {
+    // Deleting one synced copy deletes the whole group — but only across plans
+    // the user owns (defense in depth; groups never span users anyway).
+    const ownedPlanIds = (
+      await prisma.plan.findMany({ where: { userId }, select: { id: true } })
+    ).map((p) => p.id);
+    const group = await prisma.transaction.findMany({
+      where: { syncGroupId: tx.syncGroupId, planId: { in: ownedPlanIds } },
+      select: { id: true, planId: true },
+    });
+    await prisma.transaction.deleteMany({
+      where: { id: { in: group.map((g) => g.id) } },
+    });
+    synced = group.length;
+    for (const g of group) {
+      revalidatePath(`/plans/${g.planId}/log`);
+      revalidatePath(`/plans/${g.planId}`);
+      revalidatePath(`/plans/${g.planId}/summary`);
+    }
+  } else {
+    await prisma.transaction.delete({ where: { id: tx.id } });
+  }
 
   // If it was generated from a rule, remember the (rule, month) so lazy
   // materialization won't recreate it on the next load.
@@ -145,5 +241,7 @@ export async function deleteTransactionAction(
   revalidatePath(`/plans/${planId}/log`);
   revalidatePath(`/plans/${planId}`);
   revalidatePath(`/plans/${planId}/summary`);
-  return ok("ลบรายการแล้ว");
+  return ok(
+    synced > 1 ? `ลบรายการที่ซิงค์แล้ว (${synced} เป้าหมาย)` : "ลบรายการแล้ว",
+  );
 }
