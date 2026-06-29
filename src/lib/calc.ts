@@ -131,7 +131,8 @@ export type MonthBucket = {
   income: number;
   expense: number;
   saving: number;
-  net: number;
+  net: number; // this month's flow: income − expense − saving
+  cumulativeNet: number; // running carry-over of net (spendable cash to date)
   cumulativeSaving: number;
 };
 
@@ -150,17 +151,21 @@ export function monthlyBuckets(plan: PlanInput): MonthBucket[] {
     else if (t.type === "SAVING") b.saving += savingDelta(t); // net (deposit − withdraw)
   }
 
-  let cumulative = 0;
+  let cumulativeSaving = 0;
+  let cumulativeNet = 0;
   return range.map((ym) => {
     const b = init.get(ym)!;
-    cumulative += b.saving;
+    const net = b.income - b.expense - b.saving;
+    cumulativeSaving += b.saving;
+    cumulativeNet += net; // carry leftover cash forward month to month
     return {
       ym,
       income: b.income,
       expense: b.expense,
       saving: b.saving,
-      net: b.income - b.expense - b.saving,
-      cumulativeSaving: cumulative,
+      net,
+      cumulativeNet,
+      cumulativeSaving,
     };
   });
 }

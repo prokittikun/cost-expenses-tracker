@@ -36,6 +36,10 @@ export default async function SummaryPage({
         ทุกเดือนตั้งแต่ {formatMonthLabel(months[0])} ถึง{" "}
         {formatMonthLabel(months[months.length - 1])}
       </p>
+      <p className="mt-1 text-xs text-muted">
+        “สุทธิเดือนนี้” = รายรับ − รายจ่าย − เก็บเข้าเป้า ของเดือนนั้น ·
+        “คงเหลือยกยอด” = สะสมต่อเนื่อง (เงินเดือนก่อนยกมาใช้เดือนถัดไป)
+      </p>
 
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-sm">
@@ -94,13 +98,29 @@ export default async function SummaryPage({
             </tr>
 
             <tr className="border-b border-ink/5">
-              <td className="px-3 py-2 font-medium text-ink">คงเหลือสิ้นเดือน</td>
+              <td className="px-3 py-2 font-medium text-ink">สุทธิเดือนนี้</td>
               {buckets.map((b) => (
                 <td
                   key={b.ym}
                   className={`${cell} ${b.net < 0 ? "text-warn" : "text-ink"}`}
                 >
                   {formatMoney(b.net, cur)}
+                </td>
+              ))}
+            </tr>
+
+            <tr className="border-b border-ink/5 bg-paper/60">
+              <td className="px-3 py-2 font-semibold text-ink">
+                คงเหลือยกยอด (สะสม)
+              </td>
+              {buckets.map((b) => (
+                <td
+                  key={b.ym}
+                  className={`${cell} font-semibold ${
+                    b.cumulativeNet < 0 ? "text-warn" : "text-jade"
+                  }`}
+                >
+                  {formatMoney(b.cumulativeNet, cur)}
                 </td>
               ))}
             </tr>
