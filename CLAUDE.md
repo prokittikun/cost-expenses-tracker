@@ -276,8 +276,10 @@ npm run dev               # http://localhost:3000
 - `Transaction.syncGroupId String?` (migration `transaction_sync_group`): สำเนาที่ผูกกันใช้ id เดียวกัน
 - ตอน add รายการ (เฉพาะ **ไม่ใช่ SAVING** — เงินเก็บเป็นของแต่ละเป้า) เลือก checkbox เป้าปลายทางได้
   → สร้างสำเนาในแต่ละเป้า, จับคู่หมวดด้วยชื่อ+type (`ensureCategory`: ไม่มีก็สร้างให้, plannedMonthly=0)
-- ลบรายการที่ซิงค์ → `deleteTransactionAction` ลบทั้ง group (scope เฉพาะแผนของ user); แก้ทีละรายการยังไม่มี
-  (ยังไม่มีฟีเจอร์ edit transaction ในแอป)
+- ลบรายการที่ซิงค์ → `deleteTransactionAction` ลบทั้ง group (scope เฉพาะแผนของ user)
+- แก้รายการ → `updateTransactionAction` (date/amount/description/note/category): ถ้ามี syncGroupId
+  → propagate ไปทุกสำเนาในกลุ่ม (owned plans), หมวดปลายทาง map ด้วยชื่อ+type (`ensureCategory`);
+  รายการ withdrawal คงหมวด SAVING เดิม (ไม่ให้เปลี่ยนหมวด) — UI: `TxRow` สลับ view/edit ในตาราง, ปุ่ม "แก้"
 - **ไม่กระทบ /overview**: cross-plan คิดเฉพาะ SAVING + remaining/target อยู่แล้ว → income/expense ที่มิเรอร์ไม่ถูกนับซ้ำ
 - target ทุกตัวตรวจ ownership จาก session ก่อนสร้าง; UI: checkbox ในฟอร์ม log (ซ่อนเมื่อหมวด=SAVING),
   badge "ซิงค์" สีเขียวในตาราง, ยืนยันตอนลบว่าจะลบทุกเป้า

@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import {
   addTransactionAction,
   deleteTransactionAction,
+  updateTransactionAction,
 } from "@/app/actions/transactions";
 import { suggestCategoryAction } from "@/app/actions/ai";
 import { useToast } from "@/components/toast";
@@ -119,6 +120,165 @@ function DeleteTxButton({
         ลบ
       </button>
     </form>
+  );
+}
+
+type Grouped = { type: CategoryType; items: Cat[] }[];
+
+// One ledger row that can flip into an inline edit form. Saving propagates to the
+// whole sync group server-side (updateTransactionAction).
+function TxRow({
+  t,
+  planId,
+  currency,
+  grouped,
+}: {
+  t: Tx;
+  planId: string;
+  currency: string;
+  grouped: Grouped;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [state, action] = useActionState(updateTransactionAction, undefined);
+  useActionToast(state);
+  useEffect(() => {
+    if (state?.status === "success") setEditing(false);
+  }, [state]);
+
+  if (editing) {
+    return (
+      <tr className="border-b border-ink/5 bg-paper/50">
+        <td colSpan={5} className="py-3">
+          <form action={action} className="space-y-2">
+            <input type="hidden" name="planId" value={planId} />
+            <input type="hidden" name="txId" value={t.id} />
+            {/* withdrawals keep their SAVING category — don't offer a category change */}
+            {t.isWithdrawal && (
+              <input type="hidden" name="categoryId" value={t.categoryId} />
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                name="date"
+                type="date"
+                required
+                defaultValue={t.date.slice(0, 10)}
+                className={`${inputClass} w-auto tabular`}
+              />
+              {!t.isWithdrawal && (
+                <select
+                  name="categoryId"
+                  required
+                  defaultValue={t.categoryId}
+                  className={`${inputClass} w-auto`}
+                >
+                  {grouped.map((g) => (
+                    <optgroup key={g.type} label={CATEGORY_TYPE_LABEL[g.type]}>
+                      {g.items.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              )}
+              <input
+                name="amount"
+                type="number"
+                min={0.01}
+                step="any"
+                required
+                defaultValue={t.amount}
+                className={`${inputClass} w-28 tabular`}
+              />
+            </div>
+            <input
+              name="description"
+              required
+              maxLength={200}
+              defaultValue={t.description}
+              className={inputClass}
+              placeholder="รายละเอียด"
+            />
+            <input
+              name="note"
+              maxLength={500}
+              defaultValue={t.note}
+              className={inputClass}
+              placeholder="หมายเหตุ (ไม่บังคับ)"
+            />
+            {t.synced && (
+              <p className="text-xs text-muted">
+                รายการนี้ซิงค์ข้ามเป้าหมาย — แก้แล้วจะอัปเดตทุกเป้าที่ซิงค์ไว้
+              </p>
+            )}
+            {state?.status === "error" && <ErrorText>{state.message}</ErrorText>}
+            <div className="flex gap-2">
+              <Button type="submit" variant="primary">
+                บันทึก
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditing(false)}
+              >
+                ยกเลิก
+              </Button>
+            </div>
+          </form>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b border-ink/5">
+      <td className="py-2 pr-3 tabular text-muted">{formatDate(t.date)}</td>
+      <td className="py-2 pr-3">
+        <span className={t.isWithdrawal ? "text-warn" : typeAccent[t.type]}>
+          {t.categoryName}
+        </span>
+      </td>
+      <td className="py-2 pr-3">
+        {t.description}
+        {t.isWithdrawal && (
+          <span className="ml-2 rounded-full bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
+            เบิกออก
+          </span>
+        )}
+        {t.fromRule && (
+          <span className="ml-2 rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-medium text-gold">
+            ประจำ
+          </span>
+        )}
+        {t.synced && (
+          <span className="ml-2 rounded-full bg-jade/15 px-1.5 py-0.5 text-[10px] font-medium text-jade">
+            ซิงค์
+          </span>
+        )}
+        {t.note && <span className="block text-xs text-muted">{t.note}</span>}
+      </td>
+      <td
+        className={`py-2 pr-3 text-right tabular ${
+          t.isWithdrawal ? "text-warn" : typeAccent[t.type]
+        }`}
+      >
+        {t.isWithdrawal ? "−" : ""}
+        {formatMoney(t.amount, currency)}
+      </td>
+      <td className="py-2 text-right">
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-xs text-ink hover:underline"
+          >
+            แก้
+          </button>
+          <DeleteTxButton planId={planId} txId={t.id} synced={t.synced} />
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -368,48 +528,13 @@ export function LogClient({
               </thead>
               <tbody>
                 {filtered.map((t) => (
-                  <tr key={t.id} className="border-b border-ink/5">
-                    <td className="py-2 pr-3 tabular text-muted">
-                      {formatDate(t.date)}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span className={t.isWithdrawal ? "text-warn" : typeAccent[t.type]}>
-                        {t.categoryName}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-3">
-                      {t.description}
-                      {t.isWithdrawal && (
-                        <span className="ml-2 rounded-full bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn">
-                          เบิกออก
-                        </span>
-                      )}
-                      {t.fromRule && (
-                        <span className="ml-2 rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-medium text-gold">
-                          ประจำ
-                        </span>
-                      )}
-                      {t.synced && (
-                        <span className="ml-2 rounded-full bg-jade/15 px-1.5 py-0.5 text-[10px] font-medium text-jade">
-                          ซิงค์
-                        </span>
-                      )}
-                      {t.note && (
-                        <span className="block text-xs text-muted">{t.note}</span>
-                      )}
-                    </td>
-                    <td
-                      className={`py-2 pr-3 text-right tabular ${
-                        t.isWithdrawal ? "text-warn" : typeAccent[t.type]
-                      }`}
-                    >
-                      {t.isWithdrawal ? "−" : ""}
-                      {formatMoney(t.amount, currency)}
-                    </td>
-                    <td className="py-2 text-right">
-                      <DeleteTxButton planId={planId} txId={t.id} synced={t.synced} />
-                    </td>
-                  </tr>
+                  <TxRow
+                    key={t.id}
+                    t={t}
+                    planId={planId}
+                    currency={currency}
+                    grouped={grouped}
+                  />
                 ))}
               </tbody>
             </table>

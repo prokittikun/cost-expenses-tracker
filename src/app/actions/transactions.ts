@@ -186,6 +186,104 @@ export async function addTransactionAction(
   );
 }
 
+const updateSchema = z.object({
+  planId: z.string().min(1),
+  txId: z.string().min(1),
+  categoryId: z.string().min(1),
+  date: z.coerce.date(),
+  amount: z.coerce.number().positive("จำนวนเงินต้องมากกว่า 0"),
+  description: z.string().trim().min(1, "ใส่รายละเอียด").max(200),
+  note: z.string().trim().max(500).optional(),
+});
+
+export async function updateTransactionAction(
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const userId = await requireUserId();
+  const parsed = updateSchema.safeParse({
+    planId: formData.get("planId"),
+    txId: formData.get("txId"),
+    categoryId: formData.get("categoryId"),
+    date: formData.get("date"),
+    amount: formData.get("amount"),
+    description: formData.get("description"),
+    note: formData.get("note") || undefined,
+  });
+  if (!parsed.success) {
+    return fail(parsed.error.errors[0]?.message ?? "ข้อมูลไม่ถูกต้อง");
+  }
+  const d = parsed.data;
+  await assertOwnsPlan(d.planId, userId);
+
+  const tx = await prisma.transaction.findFirst({
+    where: { id: d.txId, planId: d.planId },
+    select: { id: true, syncGroupId: true, isWithdrawal: true },
+  });
+  if (!tx) return fail("ไม่พบรายการ");
+
+  // chosen category must belong to this plan
+  const cat = await prisma.category.findFirst({
+    where: { id: d.categoryId, planId: d.planId },
+    select: { id: true, name: true, type: true },
+  });
+  if (!cat) return fail("หมวดไม่ถูกต้อง");
+
+  const note = d.note ?? "";
+
+  await prisma.transaction.update({
+    where: { id: tx.id },
+    data: {
+      categoryId: d.categoryId,
+      date: d.date,
+      amount: d.amount,
+      description: d.description,
+      note,
+    },
+  });
+
+  // Propagate the edit to every other copy in the sync group (owned plans only).
+  // Each copy keeps its own plan's matching category (by name+type).
+  let synced = 1;
+  if (tx.syncGroupId) {
+    const ownedPlanIds = (
+      await prisma.plan.findMany({ where: { userId }, select: { id: true } })
+    ).map((p) => p.id);
+    const members = await prisma.transaction.findMany({
+      where: {
+        syncGroupId: tx.syncGroupId,
+        planId: { in: ownedPlanIds },
+        id: { not: tx.id },
+      },
+      select: { id: true, planId: true },
+    });
+    for (const m of members) {
+      const targetCatId = await ensureCategory(m.planId, cat.name, cat.type);
+      await prisma.transaction.update({
+        where: { id: m.id },
+        data: {
+          categoryId: targetCatId,
+          date: d.date,
+          amount: d.amount,
+          description: d.description,
+          note,
+        },
+      });
+      revalidatePath(`/plans/${m.planId}/log`);
+      revalidatePath(`/plans/${m.planId}`);
+      revalidatePath(`/plans/${m.planId}/summary`);
+    }
+    synced += members.length;
+  }
+
+  revalidatePath(`/plans/${d.planId}/log`);
+  revalidatePath(`/plans/${d.planId}`);
+  revalidatePath(`/plans/${d.planId}/summary`);
+  return ok(
+    synced > 1 ? `แก้ไขแล้ว + ซิงค์ ${synced} เป้าหมาย` : "แก้ไขรายการแล้ว",
+  );
+}
+
 export async function deleteTransactionAction(
   _prev: ActionResult,
   formData: FormData,
