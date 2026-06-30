@@ -6,6 +6,7 @@ import {
   monthlyBuckets,
   monthKey,
   safeToSpend,
+  savingDelta,
   type PlanWithMeta,
   type CalcCategory,
   type CalcTransaction,
@@ -172,11 +173,12 @@ export const AI_TOOLS: Record<
     const bucket = monthlyBuckets(plan).find((b) => b.ym === month);
     const cur = plan.currency;
 
-    // per-category totals for the month
+    // per-category totals for the month (SAVING nets deposits − withdrawals)
     const perCat = new Map<string, number>();
     for (const t of plan.transactions) {
       if (monthKey(t.date) !== month) continue;
-      perCat.set(t.categoryId, (perCat.get(t.categoryId) ?? 0) + t.amount);
+      const contrib = t.type === "SAVING" ? savingDelta(t) : t.amount;
+      perCat.set(t.categoryId, (perCat.get(t.categoryId) ?? 0) + contrib);
     }
     const categories = plan.categories
       .map((c) => ({ name: c.name, type: c.type, amount: perCat.get(c.id) ?? 0 }))

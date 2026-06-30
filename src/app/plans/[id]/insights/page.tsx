@@ -47,7 +47,9 @@ export default async function InsightsPage({
             const usedPct =
               r.usedRatio == null ? null : Math.round(r.usedRatio * 100);
             const barPct =
-              r.planned > 0 ? Math.min((r.actual / r.planned) * 100, 100) : 0;
+              r.planned > 0
+                ? Math.max(Math.min((r.actual / r.planned) * 100, 100), 0)
+                : 0;
             return (
               <div
                 key={r.categoryId}

@@ -312,7 +312,9 @@ export function categoryComparison(
   const actualByCat = new Map<string, number>();
   for (const t of plan.transactions) {
     if (monthKey(t.date) !== ym) continue;
-    actualByCat.set(t.categoryId, (actualByCat.get(t.categoryId) ?? 0) + t.amount);
+    // SAVING nets deposits against withdrawals; others use the raw amount.
+    const contrib = t.type === "SAVING" ? savingDelta(t) : t.amount;
+    actualByCat.set(t.categoryId, (actualByCat.get(t.categoryId) ?? 0) + contrib);
   }
 
   return [...plan.categories]
@@ -716,7 +718,9 @@ export function categoryMonthlyTotals(
     const ym = monthKey(t.date);
     const byMonth = out.get(t.categoryId);
     if (!byMonth) continue;
-    byMonth.set(ym, (byMonth.get(ym) ?? 0) + t.amount);
+    // SAVING nets deposits − withdrawals; others use the raw amount.
+    const contrib = t.type === "SAVING" ? savingDelta(t) : t.amount;
+    byMonth.set(ym, (byMonth.get(ym) ?? 0) + contrib);
   }
   return out;
 }
